@@ -1,14 +1,13 @@
 // Configuration Firebase
-// IMPORTANT: Remplacez ces valeurs par celles de votre projet Firebase
-// Instructions complètes dans FIREBASE_SETUP.md
+// Configuration complétée avec les clés du projet factures-serah
 
 const firebaseConfig = {
-    apiKey: "VOTRE_API_KEY",
-    authDomain: "VOTRE_PROJECT_ID.firebaseapp.com",
-    projectId: "VOTRE_PROJECT_ID",
-    storageBucket: "VOTRE_PROJECT_ID.appspot.com",
-    messagingSenderId: "VOTRE_MESSAGING_SENDER_ID",
-    appId: "VOTRE_APP_ID"
+    apiKey: "AIzaSyBDzmieVANgqmdG1Wd32jZPzusbL20sUlY",
+    authDomain: "factures-serah.firebaseapp.com",
+    projectId: "factures-serah",
+    storageBucket: "factures-serah.firebasestorage.app",
+    messagingSenderId: "317976995359",
+    appId: "1:317976995359:web:ebf96ad1b2da2f8adad72a"
 };
 
 // Initialiser Firebase
