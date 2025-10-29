@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factures - Serah Kong</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- jsPDF pour génération PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- SheetJS pour export Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Gestion de Factures</h1>
+            <p class="subtitle">Serah Kong - Instructrice Jiu-Jitsu</p>
+        </header>
+
+        <!-- Navigation par onglets -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="factures">Factures</button>
+            <button class="tab-btn" data-tab="depenses">Dépenses</button>
+        </div>
+
+        <!-- Section Factures -->
+        <div id="factures-tab" class="tab-content active">
+            <section class="card">
+                <h2>Créer une Facture</h2>
+                <form id="invoice-form">
+                    <div class="form-group">
+                        <label for="client-name">Nom du Client:</label>
+                        <input type="text" id="client-name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="client-email">Email du Client:</label>
+                        <input type="email" id="client-email" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="invoice-date">Date de Facturation:</label>
+                        <input type="date" id="invoice-date" required>
+                    </div>
+
+                    <h3>Sessions (maximum 6)</h3>
+                    <div id="sessions-container">
+                        <!-- Les sessions seront ajoutées ici dynamiquement -->
+                    </div>
+                    <button type="button" id="add-session-btn" class="btn-secondary">+ Ajouter Session</button>
+
+                    <div class="form-group total-section">
+                        <label>Total:</label>
+                        <span id="invoice-total" class="total-amount">0.00 $</span>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Générer Facture PDF</button>
+                        <button type="button" id="save-draft-btn" class="btn-secondary">Sauvegarder Brouillon</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>Factures Sauvegardées</h2>
+                <div class="list-actions">
+                    <button id="export-excel-invoices-btn" class="btn-secondary">Export Excel</button>
+                </div>
+                <div id="invoices-list" class="list-container">
+                    <p class="empty-state">Aucune facture sauvegardée</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Section Dépenses -->
+        <div id="depenses-tab" class="tab-content">
+            <section class="card">
+                <h2>Ajouter une Dépense</h2>
+                <form id="expense-form">
+                    <div class="form-group">
+                        <label for="expense-date">Date:</label>
+                        <input type="date" id="expense-date" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expense-description">Description:</label>
+                        <input type="text" id="expense-description" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expense-amount">Montant ($):</label>
+                        <input type="number" id="expense-amount" step="0.01" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expense-category">Catégorie:</label>
+                        <select id="expense-category" required>
+                            <option value="">Sélectionner...</option>
+                            <option value="equipement">Équipement</option>
+                            <option value="deplacement">Déplacement</option>
+                            <option value="formation">Formation</option>
+                            <option value="location">Location</option>
+                            <option value="autre">Autre</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="expense-photo">Photo (optionnel):</label>
+                        <input type="file" id="expense-photo" accept="image/*">
+                        <div id="photo-preview" class="photo-preview"></div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Ajouter Dépense</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2>Dépenses Enregistrées</h2>
+                <div class="list-actions">
+                    <button id="export-excel-expenses-btn" class="btn-secondary">Export Excel</button>
+                    <div class="expense-summary">
+                        Total: <span id="expenses-total" class="total-amount">0.00 $</span>
+                    </div>
+                </div>
+                <div id="expenses-list" class="list-container">
+                    <p class="empty-state">Aucune dépense enregistrée</p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
