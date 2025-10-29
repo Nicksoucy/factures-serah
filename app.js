@@ -9,59 +9,117 @@ const INSTRUCTOR_INFO = {
 
 const MAX_SESSIONS = 6;
 
-// ==================== STOCKAGE LOCAL ====================
+// ==================== STOCKAGE FIREBASE ====================
 class Storage {
-    static getInvoices() {
-        const data = localStorage.getItem('invoices');
-        return data ? JSON.parse(data) : [];
+    static getUserId() {
+        return authManager?.getUserId();
     }
 
-    static saveInvoices(invoices) {
-        localStorage.setItem('invoices', JSON.stringify(invoices));
+    static getUserCollection(collectionName) {
+        const userId = this.getUserId();
+        if (!userId) {
+            throw new Error('Utilisateur non connecté');
+        }
+        return db.collection('users').doc(userId).collection(collectionName);
     }
 
-    static addInvoice(invoice) {
-        const invoices = this.getInvoices();
-        invoices.push(invoice);
-        this.saveInvoices(invoices);
+    // FACTURES
+    static async getInvoices() {
+        try {
+            const snapshot = await this.getUserCollection('invoices')
+                .orderBy('createdAt', 'desc')
+                .get();
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (error) {
+            console.error('Erreur lors de la récupération des factures:', error);
+            return [];
+        }
     }
 
-    static deleteInvoice(id) {
-        let invoices = this.getInvoices();
-        invoices = invoices.filter(inv => inv.id !== id);
-        this.saveInvoices(invoices);
+    static async addInvoice(invoice) {
+        try {
+            const userId = this.getUserId();
+            invoice.userId = userId;
+            await this.getUserCollection('invoices').add(invoice);
+        } catch (error) {
+            console.error('Erreur lors de l\'ajout de la facture:', error);
+            throw error;
+        }
     }
 
-    static getExpenses() {
-        const data = localStorage.getItem('expenses');
-        return data ? JSON.parse(data) : [];
+    static async deleteInvoice(id) {
+        try {
+            await this.getUserCollection('invoices').doc(id).delete();
+        } catch (error) {
+            console.error('Erreur lors de la suppression de la facture:', error);
+            throw error;
+        }
     }
 
-    static saveExpenses(expenses) {
-        localStorage.setItem('expenses', JSON.stringify(expenses));
+    // DÉPENSES
+    static async getExpenses() {
+        try {
+            const snapshot = await this.getUserCollection('expenses')
+                .orderBy('createdAt', 'desc')
+                .get();
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (error) {
+            console.error('Erreur lors de la récupération des dépenses:', error);
+            return [];
+        }
     }
 
-    static addExpense(expense) {
-        const expenses = this.getExpenses();
-        expenses.push(expense);
-        this.saveExpenses(expenses);
+    static async addExpense(expense) {
+        try {
+            const userId = this.getUserId();
+            expense.userId = userId;
+            await this.getUserCollection('expenses').add(expense);
+        } catch (error) {
+            console.error('Erreur lors de l\'ajout de la dépense:', error);
+            throw error;
+        }
     }
 
-    static deleteExpense(id) {
-        let expenses = this.getExpenses();
-        expenses = expenses.filter(exp => exp.id !== id);
-        this.saveExpenses(expenses);
+    static async deleteExpense(id) {
+        try {
+            await this.getUserCollection('expenses').doc(id).delete();
+        } catch (error) {
+            console.error('Erreur lors de la suppression de la dépense:', error);
+            throw error;
+        }
     }
 
-    static getInvoiceNumber() {
-        const num = localStorage.getItem('invoiceNumber');
-        return num ? parseInt(num) : 1000;
+    // NUMÉROTATION DES FACTURES
+    static async getInvoiceNumber() {
+        try {
+            const userId = this.getUserId();
+            const counterDoc = await db.collection('users').doc(userId).get();
+            const data = counterDoc.data();
+            return data?.invoiceNumber || 1000;
+        } catch (error) {
+            console.error('Erreur lors de la récupération du numéro de facture:', error);
+            return 1000;
+        }
     }
 
-    static incrementInvoiceNumber() {
-        const current = this.getInvoiceNumber();
-        localStorage.setItem('invoiceNumber', (current + 1).toString());
-        return current;
+    static async incrementInvoiceNumber() {
+        try {
+            const userId = this.getUserId();
+            const userDoc = db.collection('users').doc(userId);
+
+            // Utiliser une transaction pour éviter les doublons
+            return await db.runTransaction(async (transaction) => {
+                const doc = await transaction.get(userDoc);
+                const currentNumber = doc.data()?.invoiceNumber || 1000;
+                const nextNumber = currentNumber + 1;
+
+                transaction.set(userDoc, { invoiceNumber: nextNumber }, { merge: true });
+                return currentNumber;
+            });
+        } catch (error) {
+            console.error('Erreur lors de l\'incrémentation du numéro de facture:', error);
+            return Date.now(); // Fallback sur timestamp si erreur
+        }
     }
 }
 
@@ -332,10 +390,10 @@ class InvoiceManager {
         }
 
         const total = sessions.reduce((sum, s) => sum + s.amount, 0);
-        const invoiceNumber = Storage.incrementInvoiceNumber();
+        const invoiceNumber = await Storage.incrementInvoiceNumber();
 
         const invoice = {
-            id: Date.now(),
+            id: Date.now().toString(),
             invoiceNumber,
             clientName,
             clientEmail,
@@ -345,17 +403,17 @@ class InvoiceManager {
             createdAt: new Date().toISOString()
         };
 
-        Storage.addInvoice(invoice);
+        await Storage.addInvoice(invoice);
         await PDFGenerator.generateInvoice(invoice);
 
         this.form.reset();
         sessionManager.reset();
-        this.renderList();
+        await this.renderList();
 
         alert(`Facture #${invoiceNumber} générée avec succès!`);
     }
 
-    saveDraft() {
+    async saveDraft() {
         const clientName = this.getClientName();
         const clientEmail = this.getClientEmail();
         const date = document.getElementById('invoice-date').value;
@@ -369,7 +427,7 @@ class InvoiceManager {
         const total = sessions.reduce((sum, s) => sum + s.amount, 0);
 
         const invoice = {
-            id: Date.now(),
+            id: Date.now().toString(),
             invoiceNumber: 'BROUILLON',
             clientName,
             clientEmail,
@@ -380,16 +438,16 @@ class InvoiceManager {
             isDraft: true
         };
 
-        Storage.addInvoice(invoice);
+        await Storage.addInvoice(invoice);
         this.form.reset();
         sessionManager.reset();
-        this.renderList();
+        await this.renderList();
 
         alert('Brouillon sauvegardé!');
     }
 
-    renderList() {
-        const invoices = Storage.getInvoices();
+    async renderList() {
+        const invoices = await Storage.getInvoices();
 
         if (invoices.length === 0) {
             this.listContainer.innerHTML = '<p class="empty-state">Aucune facture sauvegardée</p>';
@@ -410,30 +468,30 @@ class InvoiceManager {
                     <br>Email: ${invoice.clientEmail}
                 </div>
                 <div class="item-actions">
-                    ${!invoice.isDraft ? `<button class="btn-small btn-view" onclick="invoiceManager.regeneratePDF(${invoice.id})">📄 Télécharger PDF</button>` : ''}
-                    <button class="btn-small btn-delete" onclick="invoiceManager.deleteInvoice(${invoice.id})">🗑 Supprimer</button>
+                    ${!invoice.isDraft ? `<button class="btn-small btn-view" onclick="invoiceManager.regeneratePDF('${invoice.id}')">📄 Télécharger PDF</button>` : ''}
+                    <button class="btn-small btn-delete" onclick="invoiceManager.deleteInvoice('${invoice.id}')">🗑 Supprimer</button>
                 </div>
             </div>
         `).join('');
     }
 
     async regeneratePDF(id) {
-        const invoices = Storage.getInvoices();
+        const invoices = await Storage.getInvoices();
         const invoice = invoices.find(inv => inv.id === id);
         if (invoice) {
             await PDFGenerator.generateInvoice(invoice);
         }
     }
 
-    deleteInvoice(id) {
+    async deleteInvoice(id) {
         if (confirm('Êtes-vous sûr de vouloir supprimer cette facture?')) {
-            Storage.deleteInvoice(id);
-            this.renderList();
+            await Storage.deleteInvoice(id);
+            await this.renderList();
         }
     }
 
-    exportToExcel() {
-        const invoices = Storage.getInvoices();
+    async exportToExcel() {
+        const invoices = await Storage.getInvoices();
 
         if (invoices.length === 0) {
             alert('Aucune facture à exporter');
@@ -486,7 +544,7 @@ class ExpenseManager {
         }
     }
 
-    handleSubmit(e) {
+    async handleSubmit(e) {
         e.preventDefault();
 
         const date = document.getElementById('expense-date').value;
@@ -495,7 +553,7 @@ class ExpenseManager {
         const category = document.getElementById('expense-category').value;
 
         const expense = {
-            id: Date.now(),
+            id: Date.now().toString(),
             date,
             description,
             amount,
@@ -504,17 +562,17 @@ class ExpenseManager {
             createdAt: new Date().toISOString()
         };
 
-        Storage.addExpense(expense);
+        await Storage.addExpense(expense);
         this.form.reset();
         this.photoPreview.innerHTML = '';
-        this.renderList();
-        this.updateTotal();
+        await this.renderList();
+        await this.updateTotal();
 
         alert('Dépense ajoutée avec succès!');
     }
 
-    renderList() {
-        const expenses = Storage.getExpenses();
+    async renderList() {
+        const expenses = await Storage.getExpenses();
 
         if (expenses.length === 0) {
             this.listContainer.innerHTML = '<p class="empty-state">Aucune dépense enregistrée</p>';
@@ -533,7 +591,7 @@ class ExpenseManager {
                 </div>
                 ${expense.photo ? `<img src="${expense.photo}" alt="Photo dépense" class="expense-photo" onclick="expenseManager.viewPhoto('${expense.photo}')">` : ''}
                 <div class="item-actions">
-                    <button class="btn-small btn-delete" onclick="expenseManager.deleteExpense(${expense.id})">🗑 Supprimer</button>
+                    <button class="btn-small btn-delete" onclick="expenseManager.deleteExpense('${expense.id}')">🗑 Supprimer</button>
                 </div>
             </div>
         `).join('');
@@ -568,22 +626,22 @@ class ExpenseManager {
         `);
     }
 
-    deleteExpense(id) {
+    async deleteExpense(id) {
         if (confirm('Êtes-vous sûr de vouloir supprimer cette dépense?')) {
-            Storage.deleteExpense(id);
-            this.renderList();
-            this.updateTotal();
+            await Storage.deleteExpense(id);
+            await this.renderList();
+            await this.updateTotal();
         }
     }
 
-    updateTotal() {
-        const expenses = Storage.getExpenses();
+    async updateTotal() {
+        const expenses = await Storage.getExpenses();
         const total = expenses.reduce((sum, exp) => sum + exp.amount, 0);
         this.totalElement.textContent = total.toFixed(2) + ' $';
     }
 
-    exportToExcel() {
-        const expenses = Storage.getExpenses();
+    async exportToExcel() {
+        const expenses = await Storage.getExpenses();
 
         if (expenses.length === 0) {
             alert('Aucune dépense à exporter');
@@ -654,6 +712,10 @@ let invoiceManager;
 let expenseManager;
 let tabManager;
 
+// Rendre les gestionnaires globaux pour l'accès depuis les onclick
+window.invoiceManager = null;
+window.expenseManager = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     // Initialiser la date par défaut
     const today = new Date().toISOString().split('T')[0];
@@ -665,6 +727,10 @@ document.addEventListener('DOMContentLoaded', () => {
     invoiceManager = new InvoiceManager();
     expenseManager = new ExpenseManager();
     tabManager = new TabManager();
+
+    // Rendre globaux
+    window.invoiceManager = invoiceManager;
+    window.expenseManager = expenseManager;
 
     console.log('Application de facturation initialisée ✓');
 });

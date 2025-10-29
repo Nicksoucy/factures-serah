@@ -11,12 +11,53 @@
 
     <!-- SheetJS pour export Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
+    <!-- Modal de connexion/inscription -->
+    <div id="auth-modal" class="modal">
+        <div class="modal-content">
+            <h2>Connexion</h2>
+            <p class="auth-subtitle">Connectez-vous pour accéder à vos factures</p>
+
+            <form id="auth-form">
+                <div class="form-group">
+                    <label for="auth-email">Email:</label>
+                    <input type="email" id="auth-email" required placeholder="votre@email.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="auth-password">Mot de passe:</label>
+                    <input type="password" id="auth-password" required placeholder="Minimum 6 caractères">
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary" id="login-btn">Se connecter</button>
+                    <button type="button" class="btn-secondary" id="register-btn">Créer un compte</button>
+                </div>
+
+                <p id="auth-error" class="auth-error"></p>
+            </form>
+
+            <div id="user-info" class="user-info" style="display: none;">
+                <p>Connecté en tant que: <strong id="user-email"></strong></p>
+                <button type="button" class="btn-secondary" id="logout-btn">Déconnexion</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <h1>Gestion de Factures</h1>
             <p class="subtitle">Serah Kong - Instructrice Jiu-Jitsu</p>
+            <div class="user-badge" id="user-badge" style="display: none;">
+                <span id="user-badge-email"></span>
+                <button class="user-badge-btn" id="user-menu-btn">⚙️</button>
+            </div>
         </header>
 
         <!-- Navigation par onglets -->
@@ -143,6 +184,9 @@
         </div>
     </div>
 
+    <!-- Scripts Firebase -->
+    <script src="firebase-config.js"></script>
+    <script src="firebase-auth.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
