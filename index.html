@@ -32,12 +32,22 @@
                 <form id="invoice-form">
                     <div class="form-group">
                         <label for="client-name">Nom du Client:</label>
-                        <input type="text" id="client-name" required>
+                        <select id="client-name" required>
+                            <option value="">Sélectionner un client...</option>
+                            <option value="Gracie Barra Kirkland">Gracie Barra Kirkland</option>
+                            <option value="autre">Autre (saisir manuellement)</option>
+                        </select>
+                        <input type="text" id="client-name-custom" class="hidden-field" placeholder="Nom du nouveau client">
                     </div>
 
                     <div class="form-group">
                         <label for="client-email">Email du Client:</label>
-                        <input type="email" id="client-email" required>
+                        <select id="client-email" required>
+                            <option value="">Sélectionner un email...</option>
+                            <option value="scottandkim.gourley@gmail.com">scottandkim.gourley@gmail.com</option>
+                            <option value="autre">Autre (saisir manuellement)</option>
+                        </select>
+                        <input type="email" id="client-email-custom" class="hidden-field" placeholder="Email du nouveau client">
                     </div>
 
                     <div class="form-group">

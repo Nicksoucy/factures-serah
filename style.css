@@ -153,6 +153,16 @@ header h1 {
     border-color: var(--secondary-color);
 }
 
+/* Hidden fields for custom client input */
+.hidden-field {
+    display: none;
+    margin-top: 0.5rem;
+}
+
+.hidden-field.show {
+    display: block;
+}
+
 /* Sessions Container */
 #sessions-container {
     margin-bottom: 1rem;

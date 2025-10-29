@@ -266,14 +266,58 @@ class InvoiceManager {
         document.getElementById('save-draft-btn').addEventListener('click', () => this.saveDraft());
         document.getElementById('export-excel-invoices-btn').addEventListener('click', () => this.exportToExcel());
 
+        this.setupClientInputs();
         this.renderList();
+    }
+
+    setupClientInputs() {
+        const nameSelect = document.getElementById('client-name');
+        const nameCustom = document.getElementById('client-name-custom');
+        const emailSelect = document.getElementById('client-email');
+        const emailCustom = document.getElementById('client-email-custom');
+
+        // Gérer le changement de nom du client
+        nameSelect.addEventListener('change', () => {
+            if (nameSelect.value === 'autre') {
+                nameCustom.classList.add('show');
+                nameCustom.required = true;
+            } else {
+                nameCustom.classList.remove('show');
+                nameCustom.required = false;
+                nameCustom.value = '';
+            }
+        });
+
+        // Gérer le changement d'email du client
+        emailSelect.addEventListener('change', () => {
+            if (emailSelect.value === 'autre') {
+                emailCustom.classList.add('show');
+                emailCustom.required = true;
+            } else {
+                emailCustom.classList.remove('show');
+                emailCustom.required = false;
+                emailCustom.value = '';
+            }
+        });
+    }
+
+    getClientName() {
+        const nameSelect = document.getElementById('client-name');
+        const nameCustom = document.getElementById('client-name-custom');
+        return nameSelect.value === 'autre' ? nameCustom.value : nameSelect.value;
+    }
+
+    getClientEmail() {
+        const emailSelect = document.getElementById('client-email');
+        const emailCustom = document.getElementById('client-email-custom');
+        return emailSelect.value === 'autre' ? emailCustom.value : emailSelect.value;
     }
 
     async handleSubmit(e) {
         e.preventDefault();
 
-        const clientName = document.getElementById('client-name').value;
-        const clientEmail = document.getElementById('client-email').value;
+        const clientName = this.getClientName();
+        const clientEmail = this.getClientEmail();
         const date = document.getElementById('invoice-date').value;
         const sessions = sessionManager.getSessions();
 
@@ -312,8 +356,8 @@ class InvoiceManager {
     }
 
     saveDraft() {
-        const clientName = document.getElementById('client-name').value;
-        const clientEmail = document.getElementById('client-email').value;
+        const clientName = this.getClientName();
+        const clientEmail = this.getClientEmail();
         const date = document.getElementById('invoice-date').value;
         const sessions = sessionManager.getSessions();
 
