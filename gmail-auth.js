@@ -26,14 +26,21 @@ class GmailAuthManager {
      * Initialiser l'API Google
      */
     async initialize() {
-        if (this.isInitialized) return;
+        if (this.isInitialized) return true;
 
         try {
-            // Charger l'API Google si pas déjà chargée
+            // Attendre que gapi soit chargé (max 10 secondes)
             if (!window.gapi) {
-                console.warn('Google API non chargée. Assurez-vous que le script est inclus dans index.html');
+                console.log('Attente du chargement de Google API...');
+                await this.waitForGapi(10000);
+            }
+
+            if (!window.gapi) {
+                console.error('Google API non chargée après 10 secondes');
                 return false;
             }
+
+            console.log('Google API chargée, initialisation...');
 
             // Initialiser gapi
             await new Promise((resolve, reject) => {
@@ -69,6 +76,24 @@ class GmailAuthManager {
             console.error('Erreur lors de l\'initialisation de Gmail API:', error);
             return false;
         }
+    }
+
+    /**
+     * Attendre que gapi soit chargé
+     */
+    waitForGapi(timeout = 10000) {
+        return new Promise((resolve, reject) => {
+            const startTime = Date.now();
+            const checkInterval = setInterval(() => {
+                if (window.gapi) {
+                    clearInterval(checkInterval);
+                    resolve(true);
+                } else if (Date.now() - startTime > timeout) {
+                    clearInterval(checkInterval);
+                    resolve(false);
+                }
+            }, 100);
+        });
     }
 
     /**
