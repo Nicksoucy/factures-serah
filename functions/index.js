@@ -1,12 +1,13 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const { google } = require('googleapis');
+const nodemailer = require('nodemailer');
 
 admin.initializeApp();
 
 /**
  * Cloud Function pour envoyer des emails via Gmail API
- * Utilise les tokens OAuth stockés dans Firestore pour chaque utilisateur
+ * Utilise l'access token OAuth stocké dans Firestore pour chaque utilisateur
  */
 exports.sendInvoiceEmail = functions.https.onCall(async (data, context) => {
     // Vérifier que l'utilisateur est authentifié

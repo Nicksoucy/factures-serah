@@ -1,91 +1,87 @@
 // ==================== AUTHENTIFICATION GMAIL ====================
 
 /**
- * Configuration Gmail OAuth
- * IMPORTANT: Ces valeurs doivent être remplacées par vos propres clés
- * depuis Google Cloud Console
+ * Configuration Gmail OAuth avec la nouvelle Google Identity Services API
  */
 const GMAIL_CONFIG = {
     clientId: '317976995359-1avo57g6pb58os4sh22jj083pesk95bb.apps.googleusercontent.com',
-    // Les scopes nécessaires pour envoyer des emails
-    scopes: [
-        'https://www.googleapis.com/auth/gmail.send'
-    ],
-    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest']
+    scope: 'https://www.googleapis.com/auth/gmail.send'
 };
 
 class GmailAuthManager {
     constructor() {
         this.isInitialized = false;
         this.isAuthorized = false;
+        this.tokenClient = null;
+        this.accessToken = null;
         this.connectBtn = null;
         this.statusElement = null;
     }
 
     /**
-     * Initialiser l'API Google
+     * Initialiser Google Identity Services
      */
     async initialize() {
         if (this.isInitialized) return true;
 
         try {
-            // Attendre que gapi soit chargé (max 10 secondes)
-            if (!window.gapi) {
-                console.log('Attente du chargement de Google API...');
-                await this.waitForGapi(10000);
+            // Attendre que google.accounts soit chargé
+            if (!window.google?.accounts?.oauth2) {
+                console.log('Attente du chargement de Google Identity Services...');
+                await this.waitForGoogleIdentity(10000);
             }
 
-            if (!window.gapi) {
-                console.error('Google API non chargée après 10 secondes');
+            if (!window.google?.accounts?.oauth2) {
+                console.error('Google Identity Services non chargé après 10 secondes');
                 return false;
             }
 
-            console.log('Google API chargée, initialisation...');
+            console.log('Google Identity Services chargé, initialisation...');
 
-            // Initialiser gapi
-            await new Promise((resolve, reject) => {
-                gapi.load('client:auth2', {
-                    callback: resolve,
-                    onerror: reject
-                });
-            });
+            // Créer le token client
+            this.tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GMAIL_CONFIG.clientId,
+                scope: GMAIL_CONFIG.scope,
+                callback: async (response) => {
+                    if (response.error !== undefined) {
+                        console.error('Erreur OAuth:', response);
+                        alert('Erreur lors de la connexion à Gmail: ' + response.error);
+                        return;
+                    }
 
-            // Configurer le client OAuth
-            await gapi.client.init({
-                clientId: GMAIL_CONFIG.clientId,
-                scope: GMAIL_CONFIG.scopes.join(' '),
-                discoveryDocs: GMAIL_CONFIG.discoveryDocs
+                    console.log('Token OAuth reçu');
+                    this.accessToken = response.access_token;
+
+                    // Sauvegarder le token dans Firestore via Firebase Function
+                    await this.saveTokenToFirestore(response);
+
+                    this.isAuthorized = true;
+                    this.updateUI();
+                    alert('Gmail connecté avec succès!');
+                },
             });
 
             this.isInitialized = true;
 
-            // Vérifier si déjà autorisé
-            const authInstance = gapi.auth2.getAuthInstance();
-            this.isAuthorized = authInstance.isSignedIn.get();
+            // Vérifier si on a déjà un token sauvegardé
+            await this.checkExistingToken();
 
-            // Écouter les changements d'état de connexion
-            authInstance.isSignedIn.listen((isSignedIn) => {
-                this.isAuthorized = isSignedIn;
-                this.updateUI();
-            });
-
-            this.updateUI();
             return true;
 
         } catch (error) {
-            console.error('Erreur lors de l\'initialisation de Gmail API:', error);
+            console.error('Erreur lors de l\'initialisation:', error);
             return false;
         }
     }
 
     /**
-     * Attendre que gapi soit chargé
+     * Attendre que google.accounts soit chargé
      */
-    waitForGapi(timeout = 10000) {
-        return new Promise((resolve, reject) => {
+    waitForGoogleIdentity(timeout = 10000) {
+        return new Promise((resolve) => {
             const startTime = Date.now();
             const checkInterval = setInterval(() => {
-                if (window.gapi) {
+                if (window.google?.accounts?.oauth2) {
                     clearInterval(checkInterval);
                     resolve(true);
                 } else if (Date.now() - startTime > timeout) {
@@ -94,6 +90,55 @@ class GmailAuthManager {
                 }
             }, 100);
         });
+    }
+
+    /**
+     * Vérifier si l'utilisateur a déjà un token Gmail dans Firestore
+     */
+    async checkExistingToken() {
+        try {
+            const userId = authManager?.getUserId();
+            if (!userId) return;
+
+            const userDoc = await db.collection('users').doc(userId).get();
+            const userData = userDoc.data();
+
+            if (userData && userData.gmailTokens) {
+                this.isAuthorized = true;
+                this.updateUI();
+            }
+        } catch (error) {
+            console.error('Erreur lors de la vérification du token:', error);
+        }
+    }
+
+    /**
+     * Sauvegarder le token dans Firestore
+     */
+    async saveTokenToFirestore(tokenResponse) {
+        try {
+            const userId = authManager?.getUserId();
+            if (!userId) {
+                console.error('Utilisateur non connecté');
+                return;
+            }
+
+            // Sauvegarder le token dans Firestore
+            await db.collection('users').doc(userId).set({
+                gmailTokens: {
+                    access_token: tokenResponse.access_token,
+                    expires_in: tokenResponse.expires_in,
+                    token_type: tokenResponse.token_type,
+                    scope: tokenResponse.scope,
+                    received_at: Date.now()
+                },
+                gmailConnectedAt: new Date().toISOString()
+            }, { merge: true });
+
+            console.log('Token Gmail sauvegardé dans Firestore');
+        } catch (error) {
+            console.error('Erreur lors de la sauvegarde du token:', error);
+        }
     }
 
     /**
@@ -109,28 +154,10 @@ class GmailAuthManager {
         }
 
         try {
-            const authInstance = gapi.auth2.getAuthInstance();
-
-            if (!authInstance.isSignedIn.get()) {
-                // Demander l'autorisation à l'utilisateur
-                await authInstance.signIn({
-                    prompt: 'consent' // Force l'affichage de l'écran de consentement
-                });
-            }
-
-            // Obtenir le code d'autorisation
-            const authCode = await authInstance.grantOfflineAccess();
-
-            // Envoyer le code au backend pour l'échanger contre des tokens
-            const exchangeGmailCode = firebase.functions().httpsCallable('exchangeGmailCode');
-            const result = await exchangeGmailCode({ code: authCode.code });
-
-            if (result.data.success) {
-                this.isAuthorized = true;
-                this.updateUI();
-                alert('Gmail connecté avec succès! Vous pouvez maintenant envoyer des factures par email.');
-                return true;
-            }
+            // Demander l'autorisation à l'utilisateur
+            console.log('Demande d\'autorisation Gmail...');
+            this.tokenClient.requestAccessToken({ prompt: 'consent' });
+            return true;
 
         } catch (error) {
             console.error('Erreur lors de la connexion à Gmail:', error);
@@ -143,14 +170,16 @@ class GmailAuthManager {
      * Déconnecter l'utilisateur de Gmail
      */
     async disconnect() {
-        if (!this.isInitialized) return;
-
         try {
-            const authInstance = gapi.auth2.getAuthInstance();
-            await authInstance.signOut();
+            // Révoquer le token
+            if (this.accessToken) {
+                google.accounts.oauth2.revoke(this.accessToken, () => {
+                    console.log('Token révoqué');
+                });
+            }
 
-            // Supprimer les tokens du backend
-            const userId = authManager.getUserId();
+            // Supprimer les tokens du Firestore
+            const userId = authManager?.getUserId();
             if (userId) {
                 await db.collection('users').doc(userId).update({
                     gmailTokens: firebase.firestore.FieldValue.delete(),
@@ -158,6 +187,7 @@ class GmailAuthManager {
                 });
             }
 
+            this.accessToken = null;
             this.isAuthorized = false;
             this.updateUI();
             alert('Gmail déconnecté.');
@@ -217,9 +247,17 @@ class EmailSender {
                 // Basculer vers l'onglet Paramètres
                 const tabManager = window.tabManager;
                 if (tabManager) {
-                    tabManager.switchTab('settings');
+                    tabManager.switchTab('parametres');
                 }
             }
+            return false;
+        }
+
+        // Vérifier qu'on a un access token
+        if (!window.gmailAuthManager.accessToken) {
+            // Demander un nouveau token
+            alert('Votre session Gmail a expiré. Reconnectez-vous.');
+            await window.gmailAuthManager.connect();
             return false;
         }
 
@@ -230,34 +268,71 @@ class EmailSender {
             // Construire le corps de l'email en HTML
             const htmlBody = this.buildEmailHTML(invoice);
 
-            // Préparer les données pour la Cloud Function
-            const emailData = {
-                to: invoice.clientEmail,
-                subject: `Facture #${invoice.invoiceNumber} - ${userProfile.name}`,
-                htmlBody: htmlBody,
-                pdfData: pdfBase64,
-                pdfFileName: `Facture_${invoice.invoiceNumber}.pdf`
-            };
+            // Construire l'email au format RFC 2822
+            const boundary = 'boundary_' + Date.now();
+            const subject = `Facture #${invoice.invoiceNumber} - ${userProfile.name}`;
+            const pdfFileName = `Facture_${invoice.invoiceNumber}.pdf`;
 
-            // Afficher un indicateur de chargement
-            const loadingAlert = alert('Envoi de l\'email en cours...');
+            let emailBody = [
+                'Content-Type: multipart/mixed; boundary="' + boundary + '"',
+                'MIME-Version: 1.0',
+                'To: ' + invoice.clientEmail,
+                'Subject: =?UTF-8?B?' + btoa(unescape(encodeURIComponent(subject))) + '?=',
+                '',
+                '--' + boundary,
+                'Content-Type: text/html; charset="UTF-8"',
+                'MIME-Version: 1.0',
+                'Content-Transfer-Encoding: 7bit',
+                '',
+                htmlBody,
+                '',
+                '--' + boundary,
+                'Content-Type: application/pdf; name="' + pdfFileName + '"',
+                'MIME-Version: 1.0',
+                'Content-Transfer-Encoding: base64',
+                'Content-Disposition: attachment; filename="' + pdfFileName + '"',
+                '',
+                pdfBase64,
+                '',
+                '--' + boundary + '--'
+            ].join('\n');
 
-            // Appeler la Cloud Function
-            const sendInvoiceEmail = firebase.functions().httpsCallable('sendInvoiceEmail');
-            const result = await sendInvoiceEmail(emailData);
+            // Encoder l'email en base64url
+            const encodedEmail = btoa(unescape(encodeURIComponent(emailBody)))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
 
-            if (result.data.success) {
-                alert(`Email envoyé avec succès à ${invoice.clientEmail}!`);
-                return true;
+            // Envoyer via Gmail API
+            const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + window.gmailAuthManager.accessToken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    raw: encodedEmail
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error.message || 'Erreur lors de l\'envoi');
             }
+
+            alert(`Email envoyé avec succès à ${invoice.clientEmail}!`);
+            return true;
 
         } catch (error) {
             console.error('Erreur lors de l\'envoi de l\'email:', error);
 
             let errorMessage = 'Erreur lors de l\'envoi de l\'email.';
 
-            if (error.code === 'permission-denied') {
-                errorMessage = 'Les permissions Gmail ont expiré. Veuillez vous reconnecter dans les Paramètres.';
+            if (error.message.includes('401') || error.message.includes('invalid_grant')) {
+                errorMessage = 'Votre session Gmail a expiré. Veuillez vous reconnecter dans les Paramètres.';
+                window.gmailAuthManager.isAuthorized = false;
+                window.gmailAuthManager.accessToken = null;
+                window.gmailAuthManager.updateUI();
             } else if (error.message) {
                 errorMessage += ' ' + error.message;
             }
