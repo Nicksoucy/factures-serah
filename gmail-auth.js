@@ -276,6 +276,7 @@ class EmailSender {
             let emailBody = [
                 'Content-Type: multipart/mixed; boundary="' + boundary + '"',
                 'MIME-Version: 1.0',
+                'From: ' + userProfile.email,
                 'To: ' + invoice.clientEmail,
                 'Subject: =?UTF-8?B?' + btoa(unescape(encodeURIComponent(subject))) + '?=',
                 '',

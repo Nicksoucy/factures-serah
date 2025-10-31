@@ -119,6 +119,10 @@ class Storage {
     static async getProfile() {
         try {
             const userId = this.getUserId();
+            if (!userId) {
+                console.warn('getUserId returned empty - authManager not ready yet');
+                return null;
+            }
             const profileDoc = await db.collection('users').doc(userId).get();
             return profileDoc.data()?.profile || null;
         } catch (error) {
