@@ -348,6 +348,12 @@ class PDFGenerator {
         doc.setFont(undefined, 'normal');
         doc.text(`Date: ${this.formatDate(invoiceData.date)}`, 150, 27);
 
+        // Date d'échéance
+        if (invoiceData.dueDate) {
+            doc.setFont(undefined, 'bold');
+            doc.text(`Échéance: ${this.formatDate(invoiceData.dueDate)}`, 150, 34);
+        }
+
         // Informations client
         doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
@@ -536,12 +542,25 @@ class InvoiceManager {
         return document.getElementById('client-email').value;
     }
 
+    calculateDueDate(invoiceDate) {
+        const date = new Date(invoiceDate + 'T00:00:00');
+        date.setDate(date.getDate() + 30); // Ajouter 30 jours
+        return date.toISOString().split('T')[0];
+    }
+
     async handleSubmit(e) {
         e.preventDefault();
 
         const clientName = this.getClientName();
         const clientEmail = this.getClientEmail();
         const date = document.getElementById('invoice-date').value;
+        let dueDate = document.getElementById('invoice-due-date').value;
+
+        // Si pas de date d'échéance, calculer automatiquement (+30 jours)
+        if (!dueDate) {
+            dueDate = this.calculateDueDate(date);
+        }
+
         const sessions = sessionManager.getSessions();
 
         if (sessions.length === 0) {
@@ -563,6 +582,7 @@ class InvoiceManager {
             clientName,
             clientEmail,
             date,
+            dueDate,
             sessions,
             subtotal: totals.subtotal,
             tpsAmount: totals.tpsAmount,
@@ -612,6 +632,13 @@ class InvoiceManager {
         const clientName = this.getClientName();
         const clientEmail = this.getClientEmail();
         const date = document.getElementById('invoice-date').value;
+        let dueDate = document.getElementById('invoice-due-date').value;
+
+        // Si pas de date d'échéance, calculer automatiquement (+30 jours)
+        if (!dueDate) {
+            dueDate = this.calculateDueDate(date);
+        }
+
         const sessions = sessionManager.getSessions();
 
         if (!clientName || sessions.length === 0) {
@@ -627,6 +654,7 @@ class InvoiceManager {
             clientName,
             clientEmail,
             date,
+            dueDate,
             sessions,
             subtotal: totals.subtotal,
             tpsAmount: totals.tpsAmount,
@@ -670,6 +698,13 @@ class InvoiceManager {
         alert('Brouillon sauvegardé!');
     }
 
+    isOverdue(dueDate) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const due = new Date(dueDate + 'T00:00:00');
+        return due < today;
+    }
+
     async renderList() {
         const invoices = await Storage.getInvoices();
 
@@ -678,17 +713,24 @@ class InvoiceManager {
             return;
         }
 
-        this.listContainer.innerHTML = invoices.map(invoice => `
-            <div class="invoice-item">
+        this.listContainer.innerHTML = invoices.map(invoice => {
+            const isOverdue = invoice.dueDate && this.isOverdue(invoice.dueDate) && !invoice.isDraft;
+            const overdueClass = isOverdue ? 'overdue' : '';
+            const overdueIndicator = isOverdue ? '<span class="overdue-badge">⚠️ EN RETARD</span>' : '';
+
+            return `
+            <div class="invoice-item ${overdueClass}">
                 <div class="item-header">
                     <div class="item-title">
                         ${invoice.isDraft ? '📝 BROUILLON - ' : ''}${invoice.clientName}
                         ${invoice.isDraft ? '' : `<br><small>Facture #${invoice.invoiceNumber}</small>`}
+                        ${overdueIndicator}
                     </div>
                     <div class="item-amount">${invoice.total.toFixed(2)} $</div>
                 </div>
                 <div class="item-details">
-                    Date: ${PDFGenerator.formatDate(invoice.date)} | ${invoice.sessions.length} session(s)
+                    Date: ${PDFGenerator.formatDate(invoice.date)} | ${invoice.sessions.length} ligne(s)
+                    ${invoice.dueDate ? `<br>Échéance: ${PDFGenerator.formatDate(invoice.dueDate)}` : ''}
                     <br>Email: ${invoice.clientEmail}
                 </div>
                 <div class="item-actions">
@@ -696,7 +738,8 @@ class InvoiceManager {
                     <button class="btn-small btn-delete" onclick="invoiceManager.deleteInvoice('${invoice.id}')">🗑 Supprimer</button>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     async regeneratePDF(id) {
