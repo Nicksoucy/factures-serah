@@ -457,6 +457,9 @@ class EmailSender {
     }
 }
 
+// Exposer EmailSender globalement
+window.EmailSender = EmailSender;
+
 // Initialiser le gestionnaire Gmail au chargement
 let gmailAuthManager;
 document.addEventListener('DOMContentLoaded', () => {
