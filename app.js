@@ -826,6 +826,7 @@ class InvoiceManager {
                 </div>
                 <div class="item-actions">
                     ${!invoice.isDraft ? `<button class="btn-small btn-view" onclick="invoiceManager.regeneratePDF('${invoice.id}')">📄 Télécharger PDF</button>` : ''}
+                    ${!invoice.isDraft ? `<button class="btn-small btn-email" onclick="invoiceManager.sendEmail('${invoice.id}')">✉️ Envoyer Email</button>` : ''}
                     <button class="btn-small btn-delete" onclick="invoiceManager.deleteInvoice('${invoice.id}')">🗑 Supprimer</button>
                 </div>
             </div>
@@ -838,6 +839,170 @@ class InvoiceManager {
         const invoice = invoices.find(inv => inv.id === id);
         if (invoice) {
             await PDFGenerator.generateInvoice(invoice);
+        }
+    }
+
+    async sendEmail(id) {
+        const invoices = await Storage.getInvoices();
+        const invoice = invoices.find(inv => inv.id === id);
+
+        if (!invoice) {
+            alert('Facture introuvable');
+            return;
+        }
+
+        // Vérifier que le profil est configuré
+        if (!userProfile) {
+            alert('Veuillez d\'abord configurer votre profil dans l\'onglet Paramètres.');
+            return;
+        }
+
+        // Vérifier que le client a un email
+        if (!invoice.clientEmail) {
+            alert('Cette facture n\'a pas d\'adresse email associée.');
+            return;
+        }
+
+        // Générer le PDF en mémoire
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Utiliser la même logique que generateInvoice mais sans télécharger
+        // En-tête
+        doc.setFillColor(44, 62, 80);
+        doc.rect(0, 0, 210, 45, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(24);
+        doc.setFont(undefined, 'bold');
+        doc.text(userProfile.name, 15, 20);
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text(userProfile.address, 15, 28);
+        doc.text(`Tél: ${userProfile.phone}`, 15, 34);
+        doc.text(`Email: ${userProfile.email}`, 15, 40);
+
+        // Numéro et date
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Facture #${invoice.invoiceNumber}`, 150, 20);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Date: ${PDFGenerator.formatDate(invoice.date)}`, 150, 27);
+        if (invoice.dueDate) {
+            doc.setFont(undefined, 'bold');
+            doc.text(`Échéance: ${PDFGenerator.formatDate(invoice.dueDate)}`, 150, 34);
+        }
+
+        // Client
+        doc.setFontSize(14);
+        doc.setFont(undefined, 'bold');
+        doc.text('Facturé à:', 15, 60);
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'normal');
+        doc.text(invoice.clientName, 15, 68);
+        doc.text(invoice.clientEmail, 15, 74);
+
+        // Tableau
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text(userProfile.serviceLabel || 'Services', 15, 90);
+        doc.setFillColor(52, 152, 219);
+        doc.rect(15, 95, 180, 10, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.text('Date', 20, 102);
+        doc.text('Description', 60, 102);
+        doc.text('Montant', 165, 102);
+
+        // Lignes
+        doc.setTextColor(0, 0, 0);
+        let yPos = 112;
+        invoice.sessions.forEach((session, index) => {
+            const bgColor = index % 2 === 0 ? [245, 246, 250] : [255, 255, 255];
+            doc.setFillColor(...bgColor);
+            doc.rect(15, yPos - 7, 180, 10, 'F');
+            doc.text(PDFGenerator.formatDate(session.date), 20, yPos);
+            if (session.description) {
+                const maxDescLength = 50;
+                const description = session.description.length > maxDescLength
+                    ? session.description.substring(0, maxDescLength) + '...'
+                    : session.description;
+                doc.text(description, 60, yPos);
+            }
+            doc.text(`${session.amount.toFixed(2)} $`, 165, yPos);
+            yPos += 10;
+        });
+
+        // Total
+        yPos += 10;
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('Sous-total:', 130, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text(`${invoice.subtotal.toFixed(2)} $`, 165, yPos);
+
+        if (invoice.taxesEnabled && invoice.tpsAmount > 0) {
+            yPos += 8;
+            doc.text(`TPS (${invoice.tpsRate}%):`, 130, yPos);
+            doc.text(`${invoice.tpsAmount.toFixed(2)} $`, 165, yPos);
+            if (invoice.tpsNumber) {
+                yPos += 6;
+                doc.setFontSize(9);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`# TPS: ${invoice.tpsNumber}`, 130, yPos);
+                doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
+            }
+        }
+
+        if (invoice.taxesEnabled && invoice.tvqAmount > 0) {
+            yPos += 8;
+            doc.text(`TVQ (${invoice.tvqRate}%):`, 130, yPos);
+            doc.text(`${invoice.tvqAmount.toFixed(2)} $`, 165, yPos);
+            if (invoice.tvqNumber) {
+                yPos += 6;
+                doc.setFontSize(9);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`# TVQ: ${invoice.tvqNumber}`, 130, yPos);
+                doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
+            }
+        }
+
+        // Total final
+        yPos += 12;
+        doc.setFillColor(39, 174, 96);
+        doc.rect(15, yPos - 7, 180, 12, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('TOTAL', 20, yPos);
+        doc.text(`${invoice.total.toFixed(2)} $`, 165, yPos);
+
+        // Paiement
+        yPos += 25;
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('Modalités de paiement:', 15, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        doc.text(`Paiement par: ${userProfile.paymentMethod}`, 15, yPos + 7);
+        doc.text(`Envoyer à: ${userProfile.email}`, 15, yPos + 14);
+
+        // Footer
+        doc.setFontSize(9);
+        doc.setTextColor(127, 140, 141);
+        doc.text('Merci pour votre confiance!', 105, 280, { align: 'center' });
+
+        // Convertir en blob
+        const pdfBlob = doc.output('blob');
+
+        // Envoyer l'email
+        if (window.EmailSender) {
+            await EmailSender.sendInvoice(invoice, pdfBlob);
+        } else {
+            alert('Le module d\'envoi d\'email n\'est pas chargé. Vérifiez que gmail-auth.js est inclus.');
         }
     }
 
@@ -1382,6 +1547,86 @@ class ProfileManager {
     }
 }
 
+// ==================== GESTION GMAIL ====================
+class GmailUIManager {
+    constructor() {
+        this.connectBtn = document.getElementById('gmail-connect-btn');
+        this.disconnectBtn = document.getElementById('gmail-disconnect-btn');
+        this.statusText = document.getElementById('gmail-status-text');
+
+        this.setupEventListeners();
+    }
+
+    setupEventListeners() {
+        if (this.connectBtn) {
+            this.connectBtn.addEventListener('click', async () => {
+                if (window.gmailAuthManager) {
+                    const success = await window.gmailAuthManager.connect();
+                    if (success) {
+                        this.updateUI(true);
+                    }
+                } else {
+                    alert('Le module Gmail n\'est pas chargé. Vérifiez que gmail-auth.js est inclus.');
+                }
+            });
+        }
+
+        if (this.disconnectBtn) {
+            this.disconnectBtn.addEventListener('click', async () => {
+                if (window.gmailAuthManager) {
+                    await window.gmailAuthManager.disconnect();
+                    this.updateUI(false);
+                }
+            });
+        }
+
+        // Initialiser l'UI
+        this.checkGmailStatus();
+    }
+
+    async checkGmailStatus() {
+        // Vérifier si Gmail est déjà connecté dans Firestore
+        try {
+            const userId = authManager?.getUserId();
+            if (!userId) return;
+
+            const userDoc = await db.collection('users').doc(userId).get();
+            const userData = userDoc.data();
+
+            if (userData && userData.gmailTokens) {
+                this.updateUI(true);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la vérification du statut Gmail:', error);
+        }
+    }
+
+    updateUI(isConnected) {
+        if (isConnected) {
+            this.connectBtn.style.display = 'none';
+            this.disconnectBtn.style.display = 'inline-block';
+            this.statusText.textContent = '✓ Gmail Connecté';
+            this.statusText.style.color = '#27ae60';
+
+            // Informer le gestionnaire Gmail
+            if (window.gmailAuthManager) {
+                window.gmailAuthManager.isAuthorized = true;
+                window.gmailAuthManager.setUIElements(this.connectBtn, this.statusText);
+            }
+        } else {
+            this.connectBtn.style.display = 'inline-block';
+            this.disconnectBtn.style.display = 'none';
+            this.statusText.textContent = 'Gmail non connecté';
+            this.statusText.style.color = '#e74c3c';
+
+            if (window.gmailAuthManager) {
+                window.gmailAuthManager.isAuthorized = false;
+                window.gmailAuthManager.setUIElements(this.connectBtn, this.statusText);
+            }
+        }
+    }
+}
+
 // ==================== INITIALISATION ====================
 let sessionManager;
 let invoiceManager;
@@ -1389,11 +1634,13 @@ let expenseManager;
 let tabManager;
 let profileManager;
 let clientManager;
+let gmailUIManager;
 
 // Rendre les gestionnaires globaux pour l'accès depuis les onclick
 window.invoiceManager = null;
 window.expenseManager = null;
 window.clientManager = null;
+window.tabManager = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Initialiser la date par défaut
@@ -1408,11 +1655,13 @@ document.addEventListener('DOMContentLoaded', () => {
     expenseManager = new ExpenseManager();
     tabManager = new TabManager();
     profileManager = new ProfileManager();
+    gmailUIManager = new GmailUIManager();
 
     // Rendre globaux
     window.invoiceManager = invoiceManager;
     window.expenseManager = expenseManager;
     window.clientManager = clientManager;
+    window.tabManager = tabManager;
 
     console.log('Application de facturation initialisée ✓');
 });

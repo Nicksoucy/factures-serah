@@ -420,6 +420,11 @@ header h1 {
     color: white;
 }
 
+.btn-email {
+    background: #27ae60;
+    color: white;
+}
+
 .btn-delete {
     background: var(--accent-color);
     color: white;
@@ -770,4 +775,69 @@ header h1 {
     .filter-controls select {
         width: 100%;
     }
+}
+
+/* Gmail Connection Section */
+.gmail-connection-section {
+    padding: 1.5rem;
+    background: var(--background);
+    border-radius: var(--border-radius);
+}
+
+.connection-status {
+    margin-bottom: 1.5rem;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: white;
+    border-radius: var(--border-radius);
+    border: 2px solid var(--border-color);
+    font-weight: 600;
+}
+
+.status-indicator span {
+    font-size: 1rem;
+}
+
+#gmail-connect-btn.connected {
+    background: var(--success-color);
+    border-color: var(--success-color);
+}
+
+#gmail-connect-btn.connected:hover {
+    opacity: 0.9;
+}
+
+.info-box {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    border-radius: 5px;
+}
+
+.info-box h4 {
+    margin: 0 0 0.5rem 0;
+    color: #1976d2;
+    font-size: 1.1rem;
+}
+
+.info-box ul {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+    color: #555;
+}
+
+.info-box li {
+    margin: 0.25rem 0;
+}
+
+.info-box p {
+    margin: 0.5rem 0 0 0;
+    font-size: 0.9em;
+    color: #777;
 }
