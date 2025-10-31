@@ -1503,13 +1503,25 @@ class ProfileManager {
             tvqRate: parseFloat(document.getElementById('profile-tvq-rate').value) || 9.975
         };
 
+        console.log('Tentative de sauvegarde du profil:', profile);
+
         try {
+            const userId = authManager?.getUserId();
+            if (!userId) {
+                this.showStatus('Erreur: Vous devez être connecté pour sauvegarder votre profil.', 'error');
+                console.error('Utilisateur non connecté');
+                return;
+            }
+
+            console.log('User ID:', userId);
             await Storage.saveProfile(profile);
             userProfile = profile;
             this.updateHeaderDisplay();
             this.showStatus('Profil sauvegardé avec succès!', 'success');
+            console.log('Profil sauvegardé avec succès');
         } catch (error) {
-            this.showStatus('Erreur lors de la sauvegarde du profil.', 'error');
+            console.error('Erreur lors de la sauvegarde du profil:', error);
+            this.showStatus('Erreur lors de la sauvegarde du profil: ' + error.message, 'error');
         }
     }
 
