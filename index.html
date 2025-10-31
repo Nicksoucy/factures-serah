@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Factures - Serah Kong</title>
+    <title>Gestion de Factures</title>
     <link rel="stylesheet" href="style.css">
 
     <!-- jsPDF pour génération PDF -->
@@ -53,7 +53,7 @@
     <div class="container">
         <header>
             <h1>Gestion de Factures</h1>
-            <p class="subtitle">Serah Kong - Instructrice Jiu-Jitsu</p>
+            <p class="subtitle" id="user-business-name" style="display: none;"></p>
             <div class="user-badge" id="user-badge" style="display: none;">
                 <span id="user-badge-email"></span>
                 <button class="user-badge-btn" id="user-menu-btn">⚙️</button>
@@ -64,6 +64,7 @@
         <div class="tabs">
             <button class="tab-btn active" data-tab="factures">Factures</button>
             <button class="tab-btn" data-tab="depenses">Dépenses</button>
+            <button class="tab-btn" data-tab="parametres">Paramètres</button>
         </div>
 
         <!-- Section Factures -->
@@ -72,23 +73,22 @@
                 <h2>Créer une Facture</h2>
                 <form id="invoice-form">
                     <div class="form-group">
-                        <label for="client-name">Nom du Client:</label>
-                        <select id="client-name" required>
-                            <option value="">Sélectionner un client...</option>
-                            <option value="Gracie Barra Kirkland">Gracie Barra Kirkland</option>
-                            <option value="autre">Autre (saisir manuellement)</option>
+                        <label for="client-select">Sélectionner un client:</label>
+                        <select id="client-select">
+                            <option value="">-- Chargement... --</option>
                         </select>
-                        <input type="text" id="client-name-custom" class="hidden-field" placeholder="Nom du nouveau client">
                     </div>
 
-                    <div class="form-group">
-                        <label for="client-email">Email du Client:</label>
-                        <select id="client-email" required>
-                            <option value="">Sélectionner un email...</option>
-                            <option value="scottandkim.gourley@gmail.com">scottandkim.gourley@gmail.com</option>
-                            <option value="autre">Autre (saisir manuellement)</option>
-                        </select>
-                        <input type="email" id="client-email-custom" class="hidden-field" placeholder="Email du nouveau client">
+                    <div id="client-fields" style="display: none;">
+                        <div class="form-group">
+                            <label for="client-name">Nom du Client: *</label>
+                            <input type="text" id="client-name" placeholder="Nom du client">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="client-email">Email du Client: *</label>
+                            <input type="email" id="client-email" placeholder="client@example.com">
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -96,15 +96,31 @@
                         <input type="date" id="invoice-date" required>
                     </div>
 
-                    <h3>Sessions (maximum 6)</h3>
+                    <h3>Lignes de facturation</h3>
                     <div id="sessions-container">
-                        <!-- Les sessions seront ajoutées ici dynamiquement -->
+                        <!-- Les lignes seront ajoutées ici dynamiquement -->
                     </div>
-                    <button type="button" id="add-session-btn" class="btn-secondary">+ Ajouter Session</button>
+                    <button type="button" id="add-session-btn" class="btn-secondary">+ Ajouter une ligne</button>
 
                     <div class="form-group total-section">
-                        <label>Total:</label>
-                        <span id="invoice-total" class="total-amount">0.00 $</span>
+                        <div class="total-breakdown">
+                            <div class="total-line">
+                                <label>Sous-total:</label>
+                                <span id="invoice-subtotal" class="subtotal-amount">0.00 $</span>
+                            </div>
+                            <div class="total-line tax-line" id="tps-line" style="display: none;">
+                                <label>TPS (<span id="tps-rate-display">5</span>%):</label>
+                                <span id="invoice-tps" class="tax-amount">0.00 $</span>
+                            </div>
+                            <div class="total-line tax-line" id="tvq-line" style="display: none;">
+                                <label>TVQ (<span id="tvq-rate-display">9.975</span>%):</label>
+                                <span id="invoice-tvq" class="tax-amount">0.00 $</span>
+                            </div>
+                            <div class="total-line total-final">
+                                <label>Total:</label>
+                                <span id="invoice-total" class="total-amount">0.00 $</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-actions">
@@ -179,6 +195,127 @@
                 </div>
                 <div id="expenses-list" class="list-container">
                     <p class="empty-state">Aucune dépense enregistrée</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Section Paramètres -->
+        <div id="parametres-tab" class="tab-content">
+            <section class="card">
+                <h2>Mon Profil</h2>
+                <p class="info-text">Configurez vos informations professionnelles qui apparaîtront sur vos factures.</p>
+                <form id="profile-form">
+                    <div class="form-group">
+                        <label for="profile-name">Nom complet / Nom de l'entreprise: *</label>
+                        <input type="text" id="profile-name" required placeholder="Ex: Jean Dupont ou Mon Entreprise Inc.">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-business-type">Type d'activité: *</label>
+                        <input type="text" id="profile-business-type" required placeholder="Ex: Instructeur Yoga, Consultant, Designer">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-service-label">Libellé de vos services: *</label>
+                        <input type="text" id="profile-service-label" required placeholder="Ex: Sessions, Cours, Consultations, Prestations">
+                        <small>Ce terme apparaîtra sur vos factures (ex: "Sessions de coaching")</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-address">Adresse complète: *</label>
+                        <input type="text" id="profile-address" required placeholder="Ex: 123 rue Principale, Ville QC A1B 2C3">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-phone">Téléphone: *</label>
+                        <input type="tel" id="profile-phone" required placeholder="Ex: 514-123-4567">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-email">Email: *</label>
+                        <input type="email" id="profile-email" required placeholder="Ex: contact@exemple.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profile-payment-method">Modalité de paiement: *</label>
+                        <input type="text" id="profile-payment-method" required placeholder="Ex: Virement Interac, Chèque, PayPal">
+                    </div>
+
+                    <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--primary-color);">Taxes (optionnel)</h3>
+                    <p class="info-text">Si vous devez facturer des taxes (TPS/TVQ), activez cette option et entrez vos numéros d'entreprise.</p>
+
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="profile-enable-taxes" style="width: auto;">
+                            Activer les taxes sur mes factures
+                        </label>
+                    </div>
+
+                    <div id="tax-fields" style="display: none;">
+                        <div class="form-group">
+                            <label for="profile-tps-number">Numéro de TPS (optionnel):</label>
+                            <input type="text" id="profile-tps-number" placeholder="Ex: 123456789 RT0001">
+                            <small>Apparaîtra sur vos factures si vous facturez la TPS</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profile-tvq-number">Numéro de TVQ (optionnel):</label>
+                            <input type="text" id="profile-tvq-number" placeholder="Ex: 1234567890 TQ0001">
+                            <small>Apparaîtra sur vos factures si vous facturez la TVQ</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profile-tps-rate">Taux TPS (%):</label>
+                            <input type="number" id="profile-tps-rate" step="0.001" min="0" max="100" value="5" placeholder="5">
+                            <small>Taux par défaut: 5%</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profile-tvq-rate">Taux TVQ (%):</label>
+                            <input type="number" id="profile-tvq-rate" step="0.001" min="0" max="100" value="9.975" placeholder="9.975">
+                            <small>Taux par défaut au Québec: 9.975%</small>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Sauvegarder le profil</button>
+                    </div>
+                </form>
+
+                <div id="profile-status" class="profile-status" style="display: none; margin-top: 15px; padding: 10px; border-radius: 5px;"></div>
+            </section>
+
+            <section class="card">
+                <h2>Mes Clients</h2>
+                <p class="info-text">Gérez votre liste de clients pour gagner du temps lors de la création de factures.</p>
+
+                <div class="list-actions">
+                    <button id="add-client-btn" class="btn-secondary">+ Ajouter un client</button>
+                </div>
+
+                <div id="clients-list" class="list-container">
+                    <p class="empty-state">Aucun client enregistré</p>
+                </div>
+
+                <!-- Formulaire d'ajout de client (caché par défaut) -->
+                <div id="client-form-container" style="display: none; margin-top: 1.5rem; padding: 1rem; background: var(--background); border-radius: var(--border-radius);">
+                    <h3 style="margin-bottom: 1rem;">Nouveau client</h3>
+                    <form id="client-form">
+                        <div class="form-group">
+                            <label for="new-client-name">Nom: *</label>
+                            <input type="text" id="new-client-name" required placeholder="Nom du client">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="new-client-email">Email: *</label>
+                            <input type="email" id="new-client-email" required placeholder="client@example.com">
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Sauvegarder</button>
+                            <button type="button" id="cancel-client-btn" class="btn-secondary">Annuler</button>
+                        </div>
+                    </form>
                 </div>
             </section>
         </div>

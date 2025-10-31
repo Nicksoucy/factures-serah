@@ -1,13 +1,6 @@
 // ==================== CONFIGURATION ====================
-const INSTRUCTOR_INFO = {
-    name: 'Serah Kong',
-    address: '1709 rue des Pommiers, Pincourt QC J7W 0A5',
-    phone: '514-947-2561',
-    email: 'serah_k@hotmail.com',
-    paymentMethod: 'Virement Interac'
-};
-
-const MAX_SESSIONS = 6;
+// Profil utilisateur chargé dynamiquement depuis Firebase
+let userProfile = null;
 
 // ==================== STOCKAGE FIREBASE ====================
 class Storage {
@@ -121,6 +114,84 @@ class Storage {
             return Date.now(); // Fallback sur timestamp si erreur
         }
     }
+
+    // PROFIL UTILISATEUR
+    static async getProfile() {
+        try {
+            const userId = this.getUserId();
+            const profileDoc = await db.collection('users').doc(userId).get();
+            return profileDoc.data()?.profile || null;
+        } catch (error) {
+            console.error('Erreur lors de la récupération du profil:', error);
+            return null;
+        }
+    }
+
+    static async saveProfile(profile) {
+        try {
+            const userId = this.getUserId();
+            await db.collection('users').doc(userId).set({
+                profile: profile,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+            return true;
+        } catch (error) {
+            console.error('Erreur lors de la sauvegarde du profil:', error);
+            throw error;
+        }
+    }
+
+    // CLIENTS
+    static async getClients() {
+        try {
+            const snapshot = await this.getUserCollection('clients')
+                .orderBy('name')
+                .get();
+            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } catch (error) {
+            console.error('Erreur lors de la récupération des clients:', error);
+            return [];
+        }
+    }
+
+    static async addClient(client) {
+        try {
+            const userId = this.getUserId();
+
+            // Vérifier si le client existe déjà (par email)
+            const existingClients = await this.getUserCollection('clients')
+                .where('email', '==', client.email)
+                .get();
+
+            if (!existingClients.empty) {
+                // Mettre à jour le client existant
+                const existingClient = existingClients.docs[0];
+                await existingClient.ref.update({
+                    ...client,
+                    updatedAt: new Date().toISOString()
+                });
+                return existingClient.id;
+            } else {
+                // Créer un nouveau client
+                client.userId = userId;
+                client.createdAt = new Date().toISOString();
+                const docRef = await this.getUserCollection('clients').add(client);
+                return docRef.id;
+            }
+        } catch (error) {
+            console.error('Erreur lors de l\'ajout du client:', error);
+            throw error;
+        }
+    }
+
+    static async deleteClient(id) {
+        try {
+            await this.getUserCollection('clients').doc(id).delete();
+        } catch (error) {
+            console.error('Erreur lors de la suppression du client:', error);
+            throw error;
+        }
+    }
 }
 
 // ==================== GESTION DES SESSIONS ====================
@@ -129,18 +200,20 @@ class SessionManager {
         this.sessions = [];
         this.container = document.getElementById('sessions-container');
         this.addButton = document.getElementById('add-session-btn');
+        this.subtotalElement = document.getElementById('invoice-subtotal');
+        this.tpsElement = document.getElementById('invoice-tps');
+        this.tvqElement = document.getElementById('invoice-tvq');
         this.totalElement = document.getElementById('invoice-total');
+        this.tpsLine = document.getElementById('tps-line');
+        this.tvqLine = document.getElementById('tvq-line');
+        this.tpsRateDisplay = document.getElementById('tps-rate-display');
+        this.tvqRateDisplay = document.getElementById('tvq-rate-display');
 
         this.addButton.addEventListener('click', () => this.addSession());
         this.addSession(); // Ajouter une première session par défaut
     }
 
     addSession() {
-        if (this.sessions.length >= MAX_SESSIONS) {
-            alert(`Maximum ${MAX_SESSIONS} sessions autorisées`);
-            return;
-        }
-
         const sessionId = Date.now();
         const sessionDiv = document.createElement('div');
         sessionDiv.className = 'session-item';
@@ -149,6 +222,10 @@ class SessionManager {
             <div class="form-group">
                 <label>Date:</label>
                 <input type="date" class="session-date" required>
+            </div>
+            <div class="form-group">
+                <label>Description:</label>
+                <input type="text" class="session-description" placeholder="Ex: Cours du 15 janvier, Session privée...">
             </div>
             <div class="form-group">
                 <label>Montant ($):</label>
@@ -163,8 +240,6 @@ class SessionManager {
         // Ajouter event listeners pour calculer le total
         const amountInput = sessionDiv.querySelector('.session-amount');
         amountInput.addEventListener('input', () => this.updateTotal());
-
-        this.updateAddButtonState();
     }
 
     removeSession(sessionId) {
@@ -173,32 +248,59 @@ class SessionManager {
             sessionDiv.remove();
             this.sessions = this.sessions.filter(id => id !== sessionId);
             this.updateTotal();
-            this.updateAddButtonState();
         }
     }
 
     updateTotal() {
         const amounts = Array.from(this.container.querySelectorAll('.session-amount'))
             .map(input => parseFloat(input.value) || 0);
-        const total = amounts.reduce((sum, amount) => sum + amount, 0);
-        this.totalElement.textContent = total.toFixed(2) + ' $';
-        return total;
-    }
+        const subtotal = amounts.reduce((sum, amount) => sum + amount, 0);
 
-    updateAddButtonState() {
-        this.addButton.disabled = this.sessions.length >= MAX_SESSIONS;
-        if (this.sessions.length >= MAX_SESSIONS) {
-            this.addButton.style.opacity = '0.5';
-            this.addButton.style.cursor = 'not-allowed';
+        // Afficher le sous-total
+        this.subtotalElement.textContent = subtotal.toFixed(2) + ' $';
+
+        // Calculer et afficher les taxes si activées
+        let tpsAmount = 0;
+        let tvqAmount = 0;
+        let total = subtotal;
+
+        if (userProfile && userProfile.enableTaxes) {
+            // Afficher les lignes de taxes
+            this.tpsLine.style.display = 'flex';
+            this.tvqLine.style.display = 'flex';
+
+            // Mettre à jour les taux affichés
+            this.tpsRateDisplay.textContent = userProfile.tpsRate || 5;
+            this.tvqRateDisplay.textContent = userProfile.tvqRate || 9.975;
+
+            // Calculer les montants de taxes
+            tpsAmount = subtotal * (userProfile.tpsRate / 100);
+            tvqAmount = subtotal * (userProfile.tvqRate / 100);
+            total = subtotal + tpsAmount + tvqAmount;
+
+            // Afficher les montants
+            this.tpsElement.textContent = tpsAmount.toFixed(2) + ' $';
+            this.tvqElement.textContent = tvqAmount.toFixed(2) + ' $';
         } else {
-            this.addButton.style.opacity = '1';
-            this.addButton.style.cursor = 'pointer';
+            // Masquer les lignes de taxes
+            this.tpsLine.style.display = 'none';
+            this.tvqLine.style.display = 'none';
         }
+
+        this.totalElement.textContent = total.toFixed(2) + ' $';
+
+        return {
+            subtotal,
+            tpsAmount,
+            tvqAmount,
+            total
+        };
     }
 
     getSessions() {
         return Array.from(this.container.querySelectorAll('.session-item')).map(div => ({
             date: div.querySelector('.session-date').value,
+            description: div.querySelector('.session-description').value,
             amount: parseFloat(div.querySelector('.session-amount').value) || 0
         }));
     }
@@ -217,20 +319,26 @@ class PDFGenerator {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        // En-tête avec informations de l'instructrice
+        // Vérifier que le profil est chargé
+        if (!userProfile) {
+            alert('Erreur: Profil utilisateur non configuré. Veuillez configurer votre profil dans l\'onglet Paramètres.');
+            return;
+        }
+
+        // En-tête avec informations de l'utilisateur
         doc.setFillColor(44, 62, 80);
         doc.rect(0, 0, 210, 45, 'F');
 
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(24);
         doc.setFont(undefined, 'bold');
-        doc.text(INSTRUCTOR_INFO.name, 15, 20);
+        doc.text(userProfile.name, 15, 20);
 
         doc.setFontSize(10);
         doc.setFont(undefined, 'normal');
-        doc.text(INSTRUCTOR_INFO.address, 15, 28);
-        doc.text(`Tél: ${INSTRUCTOR_INFO.phone}`, 15, 34);
-        doc.text(`Email: ${INSTRUCTOR_INFO.email}`, 15, 40);
+        doc.text(userProfile.address, 15, 28);
+        doc.text(`Tél: ${userProfile.phone}`, 15, 34);
+        doc.text(`Email: ${userProfile.email}`, 15, 40);
 
         // Numéro de facture et date
         doc.setTextColor(0, 0, 0);
@@ -253,7 +361,7 @@ class PDFGenerator {
         // Tableau des sessions
         doc.setFontSize(12);
         doc.setFont(undefined, 'bold');
-        doc.text('Sessions de Jiu-Jitsu', 15, 90);
+        doc.text(userProfile.serviceLabel || 'Services', 15, 90);
 
         // En-tête du tableau
         doc.setFillColor(52, 152, 219);
@@ -261,6 +369,7 @@ class PDFGenerator {
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(10);
         doc.text('Date', 20, 102);
+        doc.text('Description', 60, 102);
         doc.text('Montant', 165, 102);
 
         // Lignes du tableau
@@ -272,12 +381,70 @@ class PDFGenerator {
             doc.rect(15, yPos - 7, 180, 10, 'F');
 
             doc.text(this.formatDate(session.date), 20, yPos);
+
+            // Afficher la description si elle existe
+            if (session.description) {
+                // Tronquer la description si elle est trop longue
+                const maxDescLength = 50;
+                const description = session.description.length > maxDescLength
+                    ? session.description.substring(0, maxDescLength) + '...'
+                    : session.description;
+                doc.text(description, 60, yPos);
+            }
+
             doc.text(`${session.amount.toFixed(2)} $`, 165, yPos);
             yPos += 10;
         });
 
-        // Total
+        // Sous-total, taxes et total
         yPos += 10;
+
+        // Sous-total
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('Sous-total:', 130, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text(`${invoiceData.subtotal.toFixed(2)} $`, 165, yPos);
+
+        // TPS (si activée)
+        if (invoiceData.taxesEnabled && invoiceData.tpsAmount > 0) {
+            yPos += 8;
+            doc.setFont(undefined, 'normal');
+            doc.text(`TPS (${invoiceData.tpsRate}%):`, 130, yPos);
+            doc.text(`${invoiceData.tpsAmount.toFixed(2)} $`, 165, yPos);
+
+            // Afficher le numéro de TPS si disponible
+            if (invoiceData.tpsNumber) {
+                yPos += 6;
+                doc.setFontSize(9);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`# TPS: ${invoiceData.tpsNumber}`, 130, yPos);
+                doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
+            }
+        }
+
+        // TVQ (si activée)
+        if (invoiceData.taxesEnabled && invoiceData.tvqAmount > 0) {
+            yPos += 8;
+            doc.setFont(undefined, 'normal');
+            doc.text(`TVQ (${invoiceData.tvqRate}%):`, 130, yPos);
+            doc.text(`${invoiceData.tvqAmount.toFixed(2)} $`, 165, yPos);
+
+            // Afficher le numéro de TVQ si disponible
+            if (invoiceData.tvqNumber) {
+                yPos += 6;
+                doc.setFontSize(9);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`# TVQ: ${invoiceData.tvqNumber}`, 130, yPos);
+                doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
+            }
+        }
+
+        // Total final
+        yPos += 12;
         doc.setFillColor(39, 174, 96);
         doc.rect(15, yPos - 7, 180, 12, 'F');
         doc.setTextColor(255, 255, 255);
@@ -295,8 +462,8 @@ class PDFGenerator {
 
         doc.setFont(undefined, 'normal');
         doc.setFontSize(10);
-        doc.text(`Paiement par: ${INSTRUCTOR_INFO.paymentMethod}`, 15, yPos + 7);
-        doc.text(`Envoyer à: ${INSTRUCTOR_INFO.email}`, 15, yPos + 14);
+        doc.text(`Paiement par: ${userProfile.paymentMethod}`, 15, yPos + 7);
+        doc.text(`Envoyer à: ${userProfile.email}`, 15, yPos + 14);
 
         // Pied de page
         doc.setFontSize(9);
@@ -329,46 +496,44 @@ class InvoiceManager {
     }
 
     setupClientInputs() {
-        const nameSelect = document.getElementById('client-name');
-        const nameCustom = document.getElementById('client-name-custom');
-        const emailSelect = document.getElementById('client-email');
-        const emailCustom = document.getElementById('client-email-custom');
+        const clientSelect = document.getElementById('client-select');
+        const clientFields = document.getElementById('client-fields');
+        const clientName = document.getElementById('client-name');
+        const clientEmail = document.getElementById('client-email');
 
-        // Gérer le changement de nom du client
-        nameSelect.addEventListener('change', () => {
-            if (nameSelect.value === 'autre') {
-                nameCustom.classList.add('show');
-                nameCustom.required = true;
+        clientSelect.addEventListener('change', () => {
+            const selectedValue = clientSelect.value;
+
+            if (selectedValue === 'new' || selectedValue === '') {
+                // Nouveau client ou aucune sélection
+                clientFields.style.display = 'block';
+                clientName.value = '';
+                clientEmail.value = '';
+                clientName.required = true;
+                clientEmail.required = true;
             } else {
-                nameCustom.classList.remove('show');
-                nameCustom.required = false;
-                nameCustom.value = '';
+                // Client existant sélectionné
+                const selectedOption = clientSelect.options[clientSelect.selectedIndex];
+                clientName.value = selectedOption.dataset.name;
+                clientEmail.value = selectedOption.dataset.email;
+                clientFields.style.display = 'block';
+                clientName.required = true;
+                clientEmail.required = true;
             }
         });
 
-        // Gérer le changement d'email du client
-        emailSelect.addEventListener('change', () => {
-            if (emailSelect.value === 'autre') {
-                emailCustom.classList.add('show');
-                emailCustom.required = true;
-            } else {
-                emailCustom.classList.remove('show');
-                emailCustom.required = false;
-                emailCustom.value = '';
-            }
-        });
+        // Afficher les champs au chargement si "Nouveau client" est sélectionné
+        if (clientSelect.value === 'new') {
+            clientFields.style.display = 'block';
+        }
     }
 
     getClientName() {
-        const nameSelect = document.getElementById('client-name');
-        const nameCustom = document.getElementById('client-name-custom');
-        return nameSelect.value === 'autre' ? nameCustom.value : nameSelect.value;
+        return document.getElementById('client-name').value;
     }
 
     getClientEmail() {
-        const emailSelect = document.getElementById('client-email');
-        const emailCustom = document.getElementById('client-email-custom');
-        return emailSelect.value === 'autre' ? emailCustom.value : emailSelect.value;
+        return document.getElementById('client-email').value;
     }
 
     async handleSubmit(e) {
@@ -380,16 +545,16 @@ class InvoiceManager {
         const sessions = sessionManager.getSessions();
 
         if (sessions.length === 0) {
-            alert('Veuillez ajouter au moins une session');
+            alert('Veuillez ajouter au moins une ligne de facturation');
             return;
         }
 
         if (sessions.some(s => !s.date || s.amount <= 0)) {
-            alert('Veuillez remplir toutes les sessions avec des valeurs valides');
+            alert('Veuillez remplir toutes les lignes avec des valeurs valides');
             return;
         }
 
-        const total = sessions.reduce((sum, s) => sum + s.amount, 0);
+        const totals = sessionManager.updateTotal();
         const invoiceNumber = await Storage.incrementInvoiceNumber();
 
         const invoice = {
@@ -399,9 +564,35 @@ class InvoiceManager {
             clientEmail,
             date,
             sessions,
-            total,
+            subtotal: totals.subtotal,
+            tpsAmount: totals.tpsAmount,
+            tvqAmount: totals.tvqAmount,
+            total: totals.total,
+            taxesEnabled: userProfile?.enableTaxes || false,
+            tpsRate: userProfile?.tpsRate || 5,
+            tvqRate: userProfile?.tvqRate || 9.975,
+            tpsNumber: userProfile?.tpsNumber || '',
+            tvqNumber: userProfile?.tvqNumber || '',
             createdAt: new Date().toISOString()
         };
+
+        // Sauvegarder automatiquement le client s'il est nouveau
+        const clientSelect = document.getElementById('client-select');
+        if (clientSelect.value === 'new' || clientSelect.value === '') {
+            try {
+                await Storage.addClient({
+                    name: clientName,
+                    email: clientEmail
+                });
+                // Recharger la liste des clients
+                if (window.clientManager) {
+                    await window.clientManager.loadClients();
+                }
+            } catch (error) {
+                console.error('Erreur lors de la sauvegarde du client:', error);
+                // Continuer quand même avec la facture
+            }
+        }
 
         await Storage.addInvoice(invoice);
         await PDFGenerator.generateInvoice(invoice);
@@ -409,6 +600,10 @@ class InvoiceManager {
         this.form.reset();
         sessionManager.reset();
         await this.renderList();
+
+        // Réinitialiser le select de client
+        clientSelect.value = '';
+        document.getElementById('client-fields').style.display = 'none';
 
         alert(`Facture #${invoiceNumber} générée avec succès!`);
     }
@@ -420,11 +615,11 @@ class InvoiceManager {
         const sessions = sessionManager.getSessions();
 
         if (!clientName || sessions.length === 0) {
-            alert('Veuillez remplir au moins le nom du client et une session');
+            alert('Veuillez remplir au moins le nom du client et une ligne');
             return;
         }
 
-        const total = sessions.reduce((sum, s) => sum + s.amount, 0);
+        const totals = sessionManager.updateTotal();
 
         const invoice = {
             id: Date.now().toString(),
@@ -433,15 +628,44 @@ class InvoiceManager {
             clientEmail,
             date,
             sessions,
-            total,
+            subtotal: totals.subtotal,
+            tpsAmount: totals.tpsAmount,
+            tvqAmount: totals.tvqAmount,
+            total: totals.total,
+            taxesEnabled: userProfile?.enableTaxes || false,
+            tpsRate: userProfile?.tpsRate || 5,
+            tvqRate: userProfile?.tvqRate || 9.975,
+            tpsNumber: userProfile?.tpsNumber || '',
+            tvqNumber: userProfile?.tvqNumber || '',
             createdAt: new Date().toISOString(),
             isDraft: true
         };
+
+        // Sauvegarder automatiquement le client s'il est nouveau
+        const clientSelect = document.getElementById('client-select');
+        if (clientSelect.value === 'new' || clientSelect.value === '') {
+            try {
+                await Storage.addClient({
+                    name: clientName,
+                    email: clientEmail
+                });
+                // Recharger la liste des clients
+                if (window.clientManager) {
+                    await window.clientManager.loadClients();
+                }
+            } catch (error) {
+                console.error('Erreur lors de la sauvegarde du client:', error);
+            }
+        }
 
         await Storage.addInvoice(invoice);
         this.form.reset();
         sessionManager.reset();
         await this.renderList();
+
+        // Réinitialiser le select de client
+        clientSelect.value = '';
+        document.getElementById('client-fields').style.display = 'none';
 
         alert('Brouillon sauvegardé!');
     }
@@ -706,15 +930,247 @@ class TabManager {
     }
 }
 
+// ==================== GESTION DES CLIENTS ====================
+class ClientManager {
+    constructor() {
+        this.clients = [];
+        this.listContainer = document.getElementById('clients-list');
+        this.addButton = document.getElementById('add-client-btn');
+        this.formContainer = document.getElementById('client-form-container');
+        this.form = document.getElementById('client-form');
+        this.cancelButton = document.getElementById('cancel-client-btn');
+
+        this.addButton.addEventListener('click', () => this.showForm());
+        this.cancelButton.addEventListener('click', () => this.hideForm());
+        this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+
+        this.loadClients();
+    }
+
+    async loadClients() {
+        try {
+            this.clients = await Storage.getClients();
+            this.renderList();
+            this.updateInvoiceClientSelect();
+        } catch (error) {
+            console.error('Erreur lors du chargement des clients:', error);
+        }
+    }
+
+    showForm() {
+        this.formContainer.style.display = 'block';
+        this.form.reset();
+    }
+
+    hideForm() {
+        this.formContainer.style.display = 'none';
+        this.form.reset();
+    }
+
+    async handleSubmit(e) {
+        e.preventDefault();
+
+        const client = {
+            name: document.getElementById('new-client-name').value,
+            email: document.getElementById('new-client-email').value
+        };
+
+        try {
+            await Storage.addClient(client);
+            this.hideForm();
+            await this.loadClients();
+            alert('Client ajouté avec succès!');
+        } catch (error) {
+            alert('Erreur lors de l\'ajout du client.');
+        }
+    }
+
+    renderList() {
+        if (this.clients.length === 0) {
+            this.listContainer.innerHTML = '<p class="empty-state">Aucun client enregistré</p>';
+            return;
+        }
+
+        this.listContainer.innerHTML = this.clients.map(client => `
+            <div class="invoice-item">
+                <div class="item-header">
+                    <div class="item-title">${client.name}</div>
+                </div>
+                <div class="item-details">
+                    Email: ${client.email}
+                </div>
+                <div class="item-actions">
+                    <button class="btn-small btn-delete" onclick="clientManager.deleteClient('${client.id}')">🗑 Supprimer</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async deleteClient(id) {
+        if (confirm('Êtes-vous sûr de vouloir supprimer ce client?')) {
+            try {
+                await Storage.deleteClient(id);
+                await this.loadClients();
+            } catch (error) {
+                alert('Erreur lors de la suppression du client.');
+            }
+        }
+    }
+
+    updateInvoiceClientSelect() {
+        const select = document.getElementById('client-select');
+        if (!select) return;
+
+        select.innerHTML = `
+            <option value="">-- Sélectionner un client --</option>
+            ${this.clients.map(client => `
+                <option value="${client.id}" data-name="${client.name}" data-email="${client.email}">
+                    ${client.name}
+                </option>
+            `).join('')}
+            <option value="new">+ Nouveau client</option>
+        `;
+    }
+
+    getClients() {
+        return this.clients;
+    }
+}
+
+// ==================== GESTION DU PROFIL ====================
+class ProfileManager {
+    constructor() {
+        this.form = document.getElementById('profile-form');
+        this.statusDiv = document.getElementById('profile-status');
+        this.enableTaxesCheckbox = document.getElementById('profile-enable-taxes');
+        this.taxFields = document.getElementById('tax-fields');
+
+        this.form.addEventListener('submit', (e) => this.handleSubmit(e));
+        this.enableTaxesCheckbox.addEventListener('change', () => this.toggleTaxFields());
+
+        this.loadProfile();
+    }
+
+    toggleTaxFields() {
+        if (this.enableTaxesCheckbox.checked) {
+            this.taxFields.style.display = 'block';
+        } else {
+            this.taxFields.style.display = 'none';
+        }
+    }
+
+    async loadProfile() {
+        try {
+            const profile = await Storage.getProfile();
+
+            if (profile) {
+                // Remplir le formulaire avec les données existantes
+                document.getElementById('profile-name').value = profile.name || '';
+                document.getElementById('profile-business-type').value = profile.businessType || '';
+                document.getElementById('profile-service-label').value = profile.serviceLabel || '';
+                document.getElementById('profile-address').value = profile.address || '';
+                document.getElementById('profile-phone').value = profile.phone || '';
+                document.getElementById('profile-email').value = profile.email || '';
+                document.getElementById('profile-payment-method').value = profile.paymentMethod || '';
+
+                // Charger les paramètres de taxes
+                this.enableTaxesCheckbox.checked = profile.enableTaxes || false;
+                document.getElementById('profile-tps-number').value = profile.tpsNumber || '';
+                document.getElementById('profile-tvq-number').value = profile.tvqNumber || '';
+                document.getElementById('profile-tps-rate').value = profile.tpsRate || 5;
+                document.getElementById('profile-tvq-rate').value = profile.tvqRate || 9.975;
+
+                // Afficher/masquer les champs de taxes
+                this.toggleTaxFields();
+
+                // Mettre à jour la variable globale
+                userProfile = profile;
+
+                // Afficher le nom de l'entreprise dans le header
+                this.updateHeaderDisplay();
+            } else {
+                // Nouveau utilisateur - afficher un message d'aide
+                this.showStatus('Bienvenue! Veuillez configurer votre profil pour commencer à créer des factures.', 'info');
+            }
+        } catch (error) {
+            console.error('Erreur lors du chargement du profil:', error);
+        }
+    }
+
+    async handleSubmit(e) {
+        e.preventDefault();
+
+        const profile = {
+            name: document.getElementById('profile-name').value,
+            businessType: document.getElementById('profile-business-type').value,
+            serviceLabel: document.getElementById('profile-service-label').value,
+            address: document.getElementById('profile-address').value,
+            phone: document.getElementById('profile-phone').value,
+            email: document.getElementById('profile-email').value,
+            paymentMethod: document.getElementById('profile-payment-method').value,
+            enableTaxes: this.enableTaxesCheckbox.checked,
+            tpsNumber: document.getElementById('profile-tps-number').value,
+            tvqNumber: document.getElementById('profile-tvq-number').value,
+            tpsRate: parseFloat(document.getElementById('profile-tps-rate').value) || 5,
+            tvqRate: parseFloat(document.getElementById('profile-tvq-rate').value) || 9.975
+        };
+
+        try {
+            await Storage.saveProfile(profile);
+            userProfile = profile;
+            this.updateHeaderDisplay();
+            this.showStatus('Profil sauvegardé avec succès!', 'success');
+        } catch (error) {
+            this.showStatus('Erreur lors de la sauvegarde du profil.', 'error');
+        }
+    }
+
+    updateHeaderDisplay() {
+        if (userProfile && userProfile.businessType) {
+            const businessNameElement = document.getElementById('user-business-name');
+            businessNameElement.textContent = `${userProfile.name} - ${userProfile.businessType}`;
+            businessNameElement.style.display = 'block';
+        }
+    }
+
+    showStatus(message, type) {
+        this.statusDiv.textContent = message;
+        this.statusDiv.style.display = 'block';
+
+        // Couleurs selon le type
+        if (type === 'success') {
+            this.statusDiv.style.backgroundColor = '#d4edda';
+            this.statusDiv.style.color = '#155724';
+            this.statusDiv.style.border = '1px solid #c3e6cb';
+        } else if (type === 'error') {
+            this.statusDiv.style.backgroundColor = '#f8d7da';
+            this.statusDiv.style.color = '#721c24';
+            this.statusDiv.style.border = '1px solid #f5c6cb';
+        } else if (type === 'info') {
+            this.statusDiv.style.backgroundColor = '#d1ecf1';
+            this.statusDiv.style.color = '#0c5460';
+            this.statusDiv.style.border = '1px solid #bee5eb';
+        }
+
+        // Masquer après 5 secondes
+        setTimeout(() => {
+            this.statusDiv.style.display = 'none';
+        }, 5000);
+    }
+}
+
 // ==================== INITIALISATION ====================
 let sessionManager;
 let invoiceManager;
 let expenseManager;
 let tabManager;
+let profileManager;
+let clientManager;
 
 // Rendre les gestionnaires globaux pour l'accès depuis les onclick
 window.invoiceManager = null;
 window.expenseManager = null;
+window.clientManager = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Initialiser la date par défaut
@@ -724,13 +1180,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialiser les gestionnaires
     sessionManager = new SessionManager();
+    clientManager = new ClientManager();
     invoiceManager = new InvoiceManager();
     expenseManager = new ExpenseManager();
     tabManager = new TabManager();
+    profileManager = new ProfileManager();
 
     // Rendre globaux
     window.invoiceManager = invoiceManager;
     window.expenseManager = expenseManager;
+    window.clientManager = clientManager;
 
     console.log('Application de facturation initialisée ✓');
 });
