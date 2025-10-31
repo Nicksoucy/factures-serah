@@ -492,10 +492,20 @@ class InvoiceManager {
     constructor() {
         this.form = document.getElementById('invoice-form');
         this.listContainer = document.getElementById('invoices-list');
+        this.allInvoices = [];
+        this.searchInput = document.getElementById('invoice-search');
+        this.periodFilter = document.getElementById('invoice-period-filter');
+        this.sortSelect = document.getElementById('invoice-sort');
+        this.countBadge = document.getElementById('invoice-count');
 
         this.form.addEventListener('submit', (e) => this.handleSubmit(e));
         document.getElementById('save-draft-btn').addEventListener('click', () => this.saveDraft());
         document.getElementById('export-excel-invoices-btn').addEventListener('click', () => this.exportToExcel());
+
+        // Événements pour recherche et filtres
+        this.searchInput.addEventListener('input', () => this.renderList());
+        this.periodFilter.addEventListener('change', () => this.renderList());
+        this.sortSelect.addEventListener('change', () => this.renderList());
 
         this.setupClientInputs();
         this.renderList();
@@ -705,15 +715,96 @@ class InvoiceManager {
         return due < today;
     }
 
-    async renderList() {
-        const invoices = await Storage.getInvoices();
+    filterBySearch(invoices, searchTerm) {
+        if (!searchTerm) return invoices;
 
-        if (invoices.length === 0) {
+        const term = searchTerm.toLowerCase();
+        return invoices.filter(invoice => {
+            return (
+                invoice.clientName.toLowerCase().includes(term) ||
+                invoice.clientEmail.toLowerCase().includes(term) ||
+                invoice.invoiceNumber.toString().toLowerCase().includes(term) ||
+                invoice.total.toString().includes(term)
+            );
+        });
+    }
+
+    filterByPeriod(invoices, period) {
+        if (period === 'all') return invoices;
+
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth();
+
+        return invoices.filter(invoice => {
+            const invoiceDate = new Date(invoice.date + 'T00:00:00');
+            const invoiceYear = invoiceDate.getFullYear();
+            const invoiceMonth = invoiceDate.getMonth();
+
+            switch (period) {
+                case 'this-month':
+                    return invoiceYear === currentYear && invoiceMonth === currentMonth;
+                case 'last-month':
+                    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+                    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+                    return invoiceYear === lastMonthYear && invoiceMonth === lastMonth;
+                case 'this-quarter':
+                    const currentQuarter = Math.floor(currentMonth / 3);
+                    const invoiceQuarter = Math.floor(invoiceMonth / 3);
+                    return invoiceYear === currentYear && invoiceQuarter === currentQuarter;
+                case 'this-year':
+                    return invoiceYear === currentYear;
+                default:
+                    return true;
+            }
+        });
+    }
+
+    sortInvoices(invoices, sortBy) {
+        const sorted = [...invoices];
+
+        switch (sortBy) {
+            case 'date-desc':
+                return sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+            case 'date-asc':
+                return sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
+            case 'client-asc':
+                return sorted.sort((a, b) => a.clientName.localeCompare(b.clientName));
+            case 'client-desc':
+                return sorted.sort((a, b) => b.clientName.localeCompare(a.clientName));
+            case 'amount-desc':
+                return sorted.sort((a, b) => b.total - a.total);
+            case 'amount-asc':
+                return sorted.sort((a, b) => a.total - b.total);
+            default:
+                return sorted;
+        }
+    }
+
+    async renderList() {
+        this.allInvoices = await Storage.getInvoices();
+
+        // Appliquer les filtres et la recherche
+        let filtered = this.allInvoices;
+        filtered = this.filterBySearch(filtered, this.searchInput.value);
+        filtered = this.filterByPeriod(filtered, this.periodFilter.value);
+        filtered = this.sortInvoices(filtered, this.sortSelect.value);
+
+        // Mettre à jour le compteur
+        this.countBadge.textContent = `${filtered.length} facture(s)`;
+
+        if (this.allInvoices.length === 0) {
             this.listContainer.innerHTML = '<p class="empty-state">Aucune facture sauvegardée</p>';
+            this.countBadge.textContent = '';
             return;
         }
 
-        this.listContainer.innerHTML = invoices.map(invoice => {
+        if (filtered.length === 0) {
+            this.listContainer.innerHTML = '<p class="empty-state">Aucune facture ne correspond aux critères de recherche</p>';
+            return;
+        }
+
+        this.listContainer.innerHTML = filtered.map(invoice => {
             const isOverdue = invoice.dueDate && this.isOverdue(invoice.dueDate) && !invoice.isDraft;
             const overdueClass = isOverdue ? 'overdue' : '';
             const overdueIndicator = isOverdue ? '<span class="overdue-badge">⚠️ EN RETARD</span>' : '';
@@ -791,10 +882,21 @@ class ExpenseManager {
         this.photoInput = document.getElementById('expense-photo');
         this.photoPreview = document.getElementById('photo-preview');
         this.totalElement = document.getElementById('expenses-total');
+        this.allExpenses = [];
+        this.searchInput = document.getElementById('expense-search');
+        this.categoryFilter = document.getElementById('expense-category-filter');
+        this.periodFilter = document.getElementById('expense-period-filter');
+        this.sortSelect = document.getElementById('expense-sort');
 
         this.form.addEventListener('submit', (e) => this.handleSubmit(e));
         this.photoInput.addEventListener('change', (e) => this.handlePhotoUpload(e));
         document.getElementById('export-excel-expenses-btn').addEventListener('click', () => this.exportToExcel());
+
+        // Événements pour recherche et filtres
+        this.searchInput.addEventListener('input', () => this.renderList());
+        this.categoryFilter.addEventListener('change', () => this.renderList());
+        this.periodFilter.addEventListener('change', () => this.renderList());
+        this.sortSelect.addEventListener('change', () => this.renderList());
 
         this.renderList();
         this.updateTotal();
@@ -838,15 +940,93 @@ class ExpenseManager {
         alert('Dépense ajoutée avec succès!');
     }
 
-    async renderList() {
-        const expenses = await Storage.getExpenses();
+    filterBySearch(expenses, searchTerm) {
+        if (!searchTerm) return expenses;
 
-        if (expenses.length === 0) {
+        const term = searchTerm.toLowerCase();
+        return expenses.filter(expense => {
+            return (
+                expense.description.toLowerCase().includes(term) ||
+                expense.amount.toString().includes(term) ||
+                this.getCategoryLabel(expense.category).toLowerCase().includes(term)
+            );
+        });
+    }
+
+    filterByCategory(expenses, category) {
+        if (category === 'all') return expenses;
+        return expenses.filter(expense => expense.category === category);
+    }
+
+    filterByPeriod(expenses, period) {
+        if (period === 'all') return expenses;
+
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth();
+
+        return expenses.filter(expense => {
+            const expenseDate = new Date(expense.date + 'T00:00:00');
+            const expenseYear = expenseDate.getFullYear();
+            const expenseMonth = expenseDate.getMonth();
+
+            switch (period) {
+                case 'this-month':
+                    return expenseYear === currentYear && expenseMonth === currentMonth;
+                case 'last-month':
+                    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+                    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+                    return expenseYear === lastMonthYear && expenseMonth === lastMonth;
+                case 'this-quarter':
+                    const currentQuarter = Math.floor(currentMonth / 3);
+                    const expenseQuarter = Math.floor(expenseMonth / 3);
+                    return expenseYear === currentYear && expenseQuarter === currentQuarter;
+                case 'this-year':
+                    return expenseYear === currentYear;
+                default:
+                    return true;
+            }
+        });
+    }
+
+    sortExpenses(expenses, sortBy) {
+        const sorted = [...expenses];
+
+        switch (sortBy) {
+            case 'date-desc':
+                return sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+            case 'date-asc':
+                return sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
+            case 'amount-desc':
+                return sorted.sort((a, b) => b.amount - a.amount);
+            case 'amount-asc':
+                return sorted.sort((a, b) => a.amount - b.amount);
+            default:
+                return sorted;
+        }
+    }
+
+    async renderList() {
+        this.allExpenses = await Storage.getExpenses();
+
+        // Appliquer les filtres et la recherche
+        let filtered = this.allExpenses;
+        filtered = this.filterBySearch(filtered, this.searchInput.value);
+        filtered = this.filterByCategory(filtered, this.categoryFilter.value);
+        filtered = this.filterByPeriod(filtered, this.periodFilter.value);
+        filtered = this.sortExpenses(filtered, this.sortSelect.value);
+
+        if (this.allExpenses.length === 0) {
             this.listContainer.innerHTML = '<p class="empty-state">Aucune dépense enregistrée</p>';
             return;
         }
 
-        this.listContainer.innerHTML = expenses.map(expense => `
+        if (filtered.length === 0) {
+            this.listContainer.innerHTML = '<p class="empty-state">Aucune dépense ne correspond aux critères de recherche</p>';
+            return;
+        }
+
+        this.listContainer.innerHTML = filtered.map(expense => `
             <div class="expense-item">
                 <div class="item-header">
                     <div class="item-title">${expense.description}</div>

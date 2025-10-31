@@ -138,8 +138,34 @@
 
             <section class="card">
                 <h2>Factures Sauvegardées</h2>
+
+                <!-- Recherche et filtres -->
+                <div class="search-filter-section">
+                    <div class="search-bar">
+                        <input type="text" id="invoice-search" placeholder="🔍 Rechercher par client, numéro, montant...">
+                    </div>
+                    <div class="filter-controls">
+                        <select id="invoice-period-filter">
+                            <option value="all">Toutes les périodes</option>
+                            <option value="this-month">Ce mois</option>
+                            <option value="last-month">Mois dernier</option>
+                            <option value="this-quarter">Ce trimestre</option>
+                            <option value="this-year">Cette année</option>
+                        </select>
+                        <select id="invoice-sort">
+                            <option value="date-desc">Plus récentes</option>
+                            <option value="date-asc">Plus anciennes</option>
+                            <option value="client-asc">Client (A-Z)</option>
+                            <option value="client-desc">Client (Z-A)</option>
+                            <option value="amount-desc">Montant (↓)</option>
+                            <option value="amount-asc">Montant (↑)</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="list-actions">
                     <button id="export-excel-invoices-btn" class="btn-secondary">Export Excel</button>
+                    <span id="invoice-count" class="count-badge"></span>
                 </div>
                 <div id="invoices-list" class="list-container">
                     <p class="empty-state">Aucune facture sauvegardée</p>
@@ -193,6 +219,37 @@
 
             <section class="card">
                 <h2>Dépenses Enregistrées</h2>
+
+                <!-- Recherche et filtres -->
+                <div class="search-filter-section">
+                    <div class="search-bar">
+                        <input type="text" id="expense-search" placeholder="🔍 Rechercher par description, montant...">
+                    </div>
+                    <div class="filter-controls">
+                        <select id="expense-category-filter">
+                            <option value="all">Toutes les catégories</option>
+                            <option value="equipement">Équipement</option>
+                            <option value="deplacement">Déplacement</option>
+                            <option value="formation">Formation</option>
+                            <option value="location">Location</option>
+                            <option value="autre">Autre</option>
+                        </select>
+                        <select id="expense-period-filter">
+                            <option value="all">Toutes les périodes</option>
+                            <option value="this-month">Ce mois</option>
+                            <option value="last-month">Mois dernier</option>
+                            <option value="this-quarter">Ce trimestre</option>
+                            <option value="this-year">Cette année</option>
+                        </select>
+                        <select id="expense-sort">
+                            <option value="date-desc">Plus récentes</option>
+                            <option value="date-asc">Plus anciennes</option>
+                            <option value="amount-desc">Montant (↓)</option>
+                            <option value="amount-asc">Montant (↑)</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="list-actions">
                     <button id="export-excel-expenses-btn" class="btn-secondary">Export Excel</button>
                     <div class="expense-summary">
