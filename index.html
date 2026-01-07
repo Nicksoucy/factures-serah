@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,6 +24,7 @@
     <!-- Google API pour Gmail API -->
     <script src="https://apis.google.com/js/api.js"></script>
 </head>
+
 <body>
     <!-- Modal de connexion/inscription -->
     <div id="auth-modal" class="modal">
@@ -40,7 +42,8 @@
                     <label for="auth-password">Mot de passe:</label>
                     <input type="password" id="auth-password" required placeholder="Minimum 6 caractères">
                     <div style="text-align: right; margin-top: 5px;">
-                        <a href="#" id="forgot-password-link" style="font-size: 0.9em; color: #3498db; text-decoration: none;">Mot de passe oublié ?</a>
+                        <a href="#" id="forgot-password-link"
+                            style="font-size: 0.9em; color: #3498db; text-decoration: none;">Mot de passe oublié ?</a>
                     </div>
                 </div>
 
@@ -151,7 +154,8 @@
                 <!-- Recherche et filtres -->
                 <div class="search-filter-section">
                     <div class="search-bar">
-                        <input type="text" id="invoice-search" placeholder="🔍 Rechercher par client, numéro, montant...">
+                        <input type="text" id="invoice-search"
+                            placeholder="🔍 Rechercher par client, numéro, montant...">
                     </div>
                     <div class="filter-controls">
                         <select id="invoice-period-filter">
@@ -279,23 +283,27 @@
                 <form id="profile-form">
                     <div class="form-group">
                         <label for="profile-name">Nom complet / Nom de l'entreprise: *</label>
-                        <input type="text" id="profile-name" required placeholder="Ex: Jean Dupont ou Mon Entreprise Inc.">
+                        <input type="text" id="profile-name" required
+                            placeholder="Ex: Jean Dupont ou Mon Entreprise Inc.">
                     </div>
 
                     <div class="form-group">
                         <label for="profile-business-type">Type d'activité: *</label>
-                        <input type="text" id="profile-business-type" required placeholder="Ex: Instructeur Yoga, Consultant, Designer">
+                        <input type="text" id="profile-business-type" required
+                            placeholder="Ex: Instructeur Yoga, Consultant, Designer">
                     </div>
 
                     <div class="form-group">
                         <label for="profile-service-label">Libellé de vos services: *</label>
-                        <input type="text" id="profile-service-label" required placeholder="Ex: Sessions, Cours, Consultations, Prestations">
+                        <input type="text" id="profile-service-label" required
+                            placeholder="Ex: Sessions, Cours, Consultations, Prestations">
                         <small>Ce terme apparaîtra sur vos factures (ex: "Sessions de coaching")</small>
                     </div>
 
                     <div class="form-group">
                         <label for="profile-address">Adresse complète: *</label>
-                        <input type="text" id="profile-address" required placeholder="Ex: 123 rue Principale, Ville QC A1B 2C3">
+                        <input type="text" id="profile-address" required
+                            placeholder="Ex: 123 rue Principale, Ville QC A1B 2C3">
                     </div>
 
                     <div class="form-group">
@@ -310,11 +318,14 @@
 
                     <div class="form-group">
                         <label for="profile-payment-method">Modalité de paiement: *</label>
-                        <input type="text" id="profile-payment-method" required placeholder="Ex: Virement Interac, Chèque, PayPal">
+                        <input type="text" id="profile-payment-method" required
+                            placeholder="Ex: Virement Interac, Chèque, PayPal">
                     </div>
 
-                    <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--primary-color);">Taxes (optionnel)</h3>
-                    <p class="info-text">Si vous devez facturer des taxes (TPS/TVQ), activez cette option et entrez vos numéros d'entreprise.</p>
+                    <h3 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--primary-color);">Taxes (optionnel)
+                    </h3>
+                    <p class="info-text">Si vous devez facturer des taxes (TPS/TVQ), activez cette option et entrez vos
+                        numéros d'entreprise.</p>
 
                     <div class="form-group">
                         <label style="display: flex; align-items: center; gap: 0.5rem;">
@@ -338,13 +349,15 @@
 
                         <div class="form-group">
                             <label for="profile-tps-rate">Taux TPS (%):</label>
-                            <input type="number" id="profile-tps-rate" step="0.001" min="0" max="100" value="5" placeholder="5">
+                            <input type="number" id="profile-tps-rate" step="0.001" min="0" max="100" value="5"
+                                placeholder="5">
                             <small>Taux par défaut: 5%</small>
                         </div>
 
                         <div class="form-group">
                             <label for="profile-tvq-rate">Taux TVQ (%):</label>
-                            <input type="number" id="profile-tvq-rate" step="0.001" min="0" max="100" value="9.975" placeholder="9.975">
+                            <input type="number" id="profile-tvq-rate" step="0.001" min="0" max="100" value="9.975"
+                                placeholder="9.975">
                             <small>Taux par défaut au Québec: 9.975%</small>
                         </div>
                     </div>
@@ -354,12 +367,14 @@
                     </div>
                 </form>
 
-                <div id="profile-status" class="profile-status" style="display: none; margin-top: 15px; padding: 10px; border-radius: 5px;"></div>
+                <div id="profile-status" class="profile-status"
+                    style="display: none; margin-top: 15px; padding: 10px; border-radius: 5px;"></div>
             </section>
 
             <section class="card">
                 <h2>Mes Clients</h2>
-                <p class="info-text">Gérez votre liste de clients pour gagner du temps lors de la création de factures.</p>
+                <p class="info-text">Gérez votre liste de clients pour gagner du temps lors de la création de factures.
+                </p>
 
                 <div class="list-actions">
                     <button id="add-client-btn" class="btn-secondary">+ Ajouter un client</button>
@@ -370,7 +385,8 @@
                 </div>
 
                 <!-- Formulaire d'ajout de client (caché par défaut) -->
-                <div id="client-form-container" style="display: none; margin-top: 1.5rem; padding: 1rem; background: var(--background); border-radius: var(--border-radius);">
+                <div id="client-form-container"
+                    style="display: none; margin-top: 1.5rem; padding: 1rem; background: var(--background); border-radius: var(--border-radius);">
                     <h3 style="margin-bottom: 1rem;">Nouveau client</h3>
                     <form id="client-form">
                         <div class="form-group">
@@ -393,7 +409,8 @@
 
             <section class="card">
                 <h2>Configuration Email</h2>
-                <p class="info-text">Connectez votre compte Gmail pour envoyer les factures directement par email à vos clients.</p>
+                <p class="info-text">Connectez votre compte Gmail pour envoyer les factures directement par email à vos
+                    clients.</p>
 
                 <div class="gmail-connection-section">
                     <div class="connection-status">
@@ -404,10 +421,12 @@
 
                     <div class="form-actions">
                         <button type="button" id="gmail-connect-btn" class="btn-primary">Connecter Gmail</button>
-                        <button type="button" id="gmail-disconnect-btn" class="btn-secondary" style="display: none;">Déconnecter Gmail</button>
+                        <button type="button" id="gmail-disconnect-btn" class="btn-secondary"
+                            style="display: none;">Déconnecter Gmail</button>
                     </div>
 
-                    <div class="info-box" style="margin-top: 1.5rem; padding: 1rem; background: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 5px;">
+                    <div class="info-box"
+                        style="margin-top: 1.5rem; padding: 1rem; background: #e3f2fd; border-left: 4px solid #2196f3; border-radius: 5px;">
                         <h4 style="margin: 0 0 0.5rem 0; color: #1976d2;">Comment ça fonctionne?</h4>
                         <ul style="margin: 0.5rem 0; padding-left: 1.5rem; color: #555;">
                             <li>Cliquez sur "Connecter Gmail"</li>
@@ -416,7 +435,8 @@
                             <li>Les emails seront envoyés depuis votre propre adresse Gmail</li>
                         </ul>
                         <p style="margin: 0.5rem 0 0 0; font-size: 0.9em; color: #777;">
-                            <strong>Note:</strong> Vous devez d'abord configurer l'application dans Google Cloud Platform (voir guide GMAIL_SETUP.md)
+                            <strong>Note:</strong> Vous devez d'abord configurer l'application dans Google Cloud
+                            Platform (voir guide GMAIL_SETUP.md)
                         </p>
                     </div>
                 </div>
@@ -425,9 +445,11 @@
     </div>
 
     <!-- Scripts Firebase -->
-    <script src="firebase-config.js"></script>
-    <script src="firebase-auth.js"></script>
-    <script src="gmail-auth.js"></script>
+    <!-- Scripts Firebase -->
+    <script src="firebase-config.js?v=1.1"></script>
+    <script src="firebase-auth.js?v=1.1"></script>
+    <script src="gmail-auth.js?v=1.1"></script>
     <script src="app.js"></script>
 </body>
+
 </html>
