@@ -34,6 +34,15 @@ class AuthManager {
 
         // Bouton menu utilisateur
         this.userMenuBtn.addEventListener('click', () => this.showModal());
+
+        // Lien mot de passe oublié
+        const forgotPasswordLink = document.getElementById('forgot-password-link');
+        if (forgotPasswordLink) {
+            forgotPasswordLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.resetPassword();
+            });
+        }
     }
 
     checkAuthState() {
@@ -179,6 +188,29 @@ class AuthManager {
         };
 
         return messages[code] || 'Une erreur est survenue: ' + code;
+    }
+
+    resetPassword() {
+        const email = document.getElementById('auth-email').value;
+
+        if (!email) {
+            this.showError('Veuillez entrer votre adresse email pour réinitialiser le mot de passe');
+            return;
+        }
+
+        this.authError.textContent = '';
+        this.authError.style.color = 'var(--text-secondary)';
+        this.authError.textContent = 'Envoi de l\'email en cours...';
+
+        auth.sendPasswordResetEmail(email)
+            .then(() => {
+                this.authError.style.color = 'var(--success-color)';
+                this.authError.textContent = 'Email de réinitialisation envoyé ! Vérifiez votre boîte mail (et les spams).';
+            })
+            .catch((error) => {
+                this.authError.style.color = 'var(--accent-color)';
+                this.showError(this.getErrorMessage(error.code));
+            });
     }
 
     getCurrentUser() {
